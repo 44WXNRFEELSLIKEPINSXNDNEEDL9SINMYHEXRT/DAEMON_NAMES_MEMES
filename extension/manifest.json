@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "DAEMON NAMES MEMES",
+  "version": "0.1",
+  "permissions": ["contextMenus", "downloads", "storage"],
+  "host_permissions": [
+    "https://your-proxy.workers.dev/*",
+    "https://x.com/*",
+    "https://reddit.com/*"
+  ],
+  "background": { "service_worker": "background.js" }
+}
