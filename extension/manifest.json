@@ -4,6 +4,7 @@
   "version": "0.2",
   "default_locale": "en",
   "permissions": ["contextMenus", "downloads", "storage"],
+  "options_page": "options.html",
   "host_permissions": [
     "https://daemon-meme.windown52358.workers.dev/*",
     "https://x.com/*",
@@ -16,10 +17,10 @@
     "128": "images/icon-128px.png"
   },
   "action": {
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "images/icon-16px.png",
       "32": "images/icon-32px.png"
-  },
-    "default_popup": "popup.html"
+  }
   }
 }
