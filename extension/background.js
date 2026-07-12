@@ -24,8 +24,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     const ext = blob.type.split("/")[1] || "jpg";
     const filename = isMeme
-      ? `meme_${filenameSlug}.${ext}`
-      : `image_${Date.now()}.${ext}`;
+      ? `${filenameSlug}.${ext}`
+      : `${Date.now()}.${ext}`;
 
     chrome.downloads.download({ url: info.srcUrl, filename });
   } catch (err) {

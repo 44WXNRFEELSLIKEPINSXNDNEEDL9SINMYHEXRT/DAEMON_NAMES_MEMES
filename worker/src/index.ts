@@ -61,11 +61,39 @@ export default {
       }
     );
 
-    const data = await geminiResp.json();
+    interface GeminiResponse {
+      candidates?: Array<{
+        content?: {
+          parts?: Array<{ text?: string }>;
+        };
+      }>;
+    }
 
-	// TEMP: log the real response while debugging
-	return new Response(JSON.stringify(data, null, 2), {
-  	headers: { "Content-Type": "application/json" }
-	});
+    interface ResponseData {
+      isMeme: boolean;
+      filenameSlug: string;
+      tags: string[];
+      error?: string;
+    }
+
+    const data = await geminiResp.json() as GeminiResponse;
+
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+
+    let memeInfo: ResponseData;
+
+    try {
+      memeInfo = JSON.parse(rawText) as ResponseData;
+    } catch (error) {
+      console.error("JSON parse error:", error);
+      memeInfo = { isMeme: false, filenameSlug: "unknown", tags: [], error: "classification_failed" };
+    }
+
+    return new Response(JSON.stringify(memeInfo), {
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+      }
+    });
   }
 } satisfies ExportedHandler<Env>;
