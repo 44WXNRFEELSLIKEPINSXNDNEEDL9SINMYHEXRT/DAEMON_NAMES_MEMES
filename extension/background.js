@@ -1,7 +1,7 @@
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "download-as-meme",
-    title: "Download as meme",
+    title: chrome.i18n.getMessage("contextMenuTitle"),
     contexts: ["image"]
   });
 });
