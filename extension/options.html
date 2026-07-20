@@ -5,16 +5,19 @@
 <title>Daemon Names Memes: Settings</title>
 <style>
   :root {
-    --bg: #0a0808;
-    --panel: #151010;
-    --panel-border: #2a1414;
-    --blood: #8B0000;
-    --blood-bright: #b81a1a;
-    --blood-dim: #4a0000;
-    --text: #e8e0dc;
-    --text-dim: #8a7d78;
-    --mono: "Times New Roman", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
-    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    --bg: #0d0a09;
+    --panel: #181210;
+    --panel-border: #33201c;
+    --panel-border-hi: #4a2b25;
+    --blood: #8a1c1c;
+    --blood-bright: #c66b5f;
+    --blood-dim: #532320;
+    --text: #ded4cc;
+    --text-dim: #ab9c92;
+    --text-faint: #8d7f76;
+    --display: "Optima", "Candara", "Gill Sans", "Avenir Next", "Segoe UI", "Trebuchet MS", sans-serif;
+    --body: "Avenir Next", "Avenir", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", "Noto Sans", sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", "Roboto Mono", monospace;
   }
 
   * { box-sizing: border-box; }
@@ -22,9 +25,10 @@
   body {
     background: var(--bg);
     background-image:
-      radial-gradient(ellipse at top, rgba(139,0,0,0.08) 0%, transparent 55%);
+      radial-gradient(ellipse at top, rgba(138,28,28,0.10) 0%, transparent 55%);
     color: var(--text);
-    font-family: var(--serif);
+    font-family: var(--body);
+    -webkit-font-smoothing: antialiased;
     margin: 0;
     padding: 48px 24px 96px;
     min-height: 100vh;
@@ -48,9 +52,9 @@
   }
 
   h1 {
-    font-family: var(--serif);
-    font-size: 28px;
-    font-weight: 400;
+    font-family: var(--display);
+    font-size: 29px;
+    font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     margin: 0 0 8px;
@@ -58,11 +62,11 @@
   }
 
   .tagline {
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.12em;
+    font-family: var(--body);
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--text-dim);
+    color: var(--text-faint);
   }
 
   section {
@@ -83,9 +87,10 @@
   }
 
   .eyebrow {
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.18em;
+    font-family: var(--body);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--blood-bright);
     display: flex;
@@ -101,8 +106,10 @@
   }
 
   .section-title {
-    font-size: 17px;
-    font-weight: 400;
+    font-family: var(--display);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
     margin: 2px 0 20px;
     color: var(--text);
   }
@@ -131,8 +138,8 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    font-family: var(--mono);
-    font-size: 13px;
+    font-family: var(--body);
+    font-size: 13.5px;
     cursor: pointer;
   }
 
@@ -149,14 +156,15 @@
   }
 
   .default-tag {
-    font-family: var(--mono);
-    font-size: 9px;
+    font-family: var(--body);
+    font-size: 10.5px;
+    font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--blood-bright);
     border: 1px solid var(--blood-dim);
-    padding: 2px 7px;
-    border-radius: 2px;
+    padding: 2px 8px;
+    border-radius: 4px;
     opacity: 0;
   }
 
@@ -208,7 +216,7 @@
     font-size: 12px;
     cursor: pointer;
     padding: 6px;
-    font-family: var(--mono);
+    font-family: var(--body);
   }
 
   .toggle-visibility:hover { color: var(--text); }
@@ -223,24 +231,25 @@
   .rate-field input { width: 60px; text-align: right; }
 
   .rate-unit {
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--text-dim);
+    font-family: var(--body);
+    font-size: 11px;
+    color: var(--text-faint);
     white-space: nowrap;
   }
 
   .field-hint {
-    font-family: var(--mono);
-    font-size: 10px;
+    font-family: var(--body);
+    font-size: 11.5px;
     color: var(--text-dim);
     margin-top: 6px;
   }
 
   label.plain {
     display: block;
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.06em;
+    font-family: var(--body);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-dim);
     margin-bottom: 8px;
@@ -269,19 +278,25 @@
 
   button.save {
     background: var(--blood);
-    color: #fff;
+    color: #f5ebe4;
     border: none;
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: 0.1em;
+    font-family: var(--body);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    padding: 13px 32px;
-    border-radius: 2px;
+    padding: 13px 34px;
+    border-radius: 999px;
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
   }
 
-  button.save:hover { background: var(--blood-bright); }
+  button.save:hover {
+    background: var(--blood-bright);
+    box-shadow: 0 4px 16px rgba(138,28,28,0.35);
+  }
+
+  button.save:active { transform: scale(0.97); }
 
   button.save:focus-visible,
   input:focus-visible,
@@ -299,11 +314,11 @@
     background: var(--panel);
     border: 1px solid var(--blood-dim);
     color: var(--text);
-    font-family: var(--mono);
-    font-size: 12px;
+    font-family: var(--body);
+    font-size: 12.5px;
     letter-spacing: 0.04em;
     padding: 12px 20px;
-    border-radius: 2px;
+    border-radius: 4px;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease, transform 0.2s ease;
@@ -324,9 +339,9 @@
 
   <header>
     <svg class="sigil" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M20 4 L34 30 L6 30 Z" stroke="#8B0000" stroke-width="1.4"/>
-      <circle cx="20" cy="22" r="4.5" stroke="#b81a1a" stroke-width="1.2"/>
-      <path d="M20 4 L20 30" stroke="#4a0000" stroke-width="1"/>
+      <path d="M20 4 L34 30 L6 30 Z" stroke="#8a1c1c" stroke-width="1.4"/>
+      <circle cx="20" cy="22" r="4.5" stroke="#c66b5f" stroke-width="1.2"/>
+      <path d="M20 4 L20 30" stroke="#532320" stroke-width="1"/>
     </svg>
     <h1>Daemon Names Memes</h1>
     <div class="tagline">classification &amp; naming settings</div>

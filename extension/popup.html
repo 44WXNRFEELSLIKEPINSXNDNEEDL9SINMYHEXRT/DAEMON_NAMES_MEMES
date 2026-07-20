@@ -5,129 +5,177 @@
 <title>Daemon Names Memes</title>
 <style>
   :root {
-    --bg: #0a0808;
-    --panel: #131010;
-    --panel-border: #2a1414;
-    --blood: #8B0000;
-    --blood-bright: #b81a1a;
-    --blood-dim: #4a0000;
-    --text: #e8e0dc;
-    --text-dim: #8a7d78;
-    --mono: "Times New Roman", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
-    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    --bg: #0d0a09;
+    --panel: #181210;
+    --panel-border: #33201c;
+    --panel-border-hi: #4a2b25;
+    --blood: #8a1c1c;
+    --blood-bright: #c66b5f;
+    --blood-dim: #532320;
+    --text: #ded4cc;
+    --text-dim: #ab9c92;
+    --text-faint: #8d7f76;
+    --display: "Optima", "Candara", "Gill Sans", "Avenir Next", "Segoe UI", "Trebuchet MS", sans-serif;
+    --body: "Avenir Next", "Avenir", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", "Noto Sans", sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", "Roboto Mono", monospace;
   }
 
   * { box-sizing: border-box; }
 
   body {
-    width: 320px;
+    width: 340px;
     margin: 0;
-    background: var(--bg);
-    background-image: radial-gradient(ellipse at top, rgba(139,0,0,0.10) 0%, transparent 60%);
+    background:
+      radial-gradient(120% 70% at 50% -10%, rgba(138,28,28,0.14) 0%, transparent 55%),
+      radial-gradient(90% 50% at 50% 110%, rgba(120,45,40,0.07) 0%, transparent 60%),
+      var(--bg);
     color: var(--text);
-    font-family: var(--serif);
+    font-family: var(--body);
+    -webkit-font-smoothing: antialiased;
   }
 
   .top {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 16px 18px 14px;
+    gap: 11px;
+    padding: 18px 20px 15px;
     border-bottom: 1px solid var(--panel-border);
   }
 
-  .sigil { width: 20px; height: 20px; flex-shrink: 0; }
-
-  .top h1 {
-    font-size: 17px;
-    font-weight: 400;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    margin: 0;
+  .sigil {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    animation: breathe 4.5s ease-in-out infinite;
   }
 
-  .body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 16px; }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+
+  .top h1 {
+    font-family: var(--display);
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    margin: 0;
+    color: var(--text);
+  }
+
+  .body {
+    padding: 16px 20px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
 
   .stat-block {
     background: var(--panel);
     border: 1px solid var(--panel-border);
-    border-radius: 2px;
-    padding: 12px 14px;
+    border-radius: 6px;
+    padding: 13px 15px;
+    transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .stat-block:hover {
+    border-color: var(--panel-border-hi);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
   }
 
   .eyebrow {
-    font-family: var(--mono);
+    font-family: var(--body);
     font-size: 12px;
-    letter-spacing: 0.14em;
+    font-weight: 700;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--text);
-    margin-bottom: 8px;
+    color: var(--text-dim);
+    margin-bottom: 9px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-weight: bold !important;
   }
 
   .provider-chip {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 11.5px;
     color: var(--blood-bright);
+    background: rgba(138,28,28,0.12);
     border: 1px solid var(--blood-dim);
-    padding: 1px 6px;
-    border-radius: 2px;
-    text-transform: none;
-    letter-spacing: 0;
+    padding: 2px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.03em;
   }
 
   .key-value {
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text);
+    letter-spacing: 0.02em;
   }
 
-  .key-value.unset { color: var(--blood-bright); }
+  .key-value.unset {
+    color: var(--blood-bright);
+  }
 
   .bar-row {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 8px;
+    margin-bottom: 9px;
   }
 
   .bar-numbers {
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 14px;
   }
 
-  .bar-numbers .used { color: var(--text); }
-  .bar-numbers .limit { color: var(--text-dim); }
+  .bar-numbers .used { color: var(--text); font-weight: 600; }
+  .bar-numbers .limit { color: var(--text-faint); font-size: 12px; }
 
   .bar-track {
-    height: 4px;
-    background: #1c1616;
-    border-radius: 2px;
+    height: 6px;
+    background: #241a17;
+    border-radius: 3px;
     overflow: hidden;
   }
 
   .bar-fill {
     height: 100%;
-    background: var(--blood);
-    transition: width 0.2s ease;
+    background: linear-gradient(90deg, var(--blood), var(--blood-bright));
+    border-radius: 3px;
+    transition: width 0.35s cubic-bezier(0.22, 0.8, 0.36, 1);
   }
 
-  .bar-fill.warn { background: var(--blood-bright); }
+  .bar-fill.warn { background: linear-gradient(90deg, #a03030, #d0705f); }
+
+  .bar-total {
+    margin-top: 9px;
+    font-family: var(--body);
+    font-size: 12.5px;
+    color: var(--text-faint);
+  }
+
+  .bar-total span {
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--text-dim);
+  }
 
   .preview-block {
     display: flex;
     gap: 12px;
+    align-items: center;
   }
 
   .preview-thumb {
     width: 56px;
     height: 56px;
-    border-radius: 2px;
+    border-radius: 5px;
     border: 1px solid var(--panel-border);
-    background: #0d0a0a;
+    background: #120d0c;
     flex-shrink: 0;
     object-fit: cover;
   }
@@ -136,13 +184,12 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 4px;
+    gap: 5px;
   }
 
   .preview-name {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text);
     white-space: nowrap;
     overflow: hidden;
@@ -150,18 +197,18 @@
   }
 
   .preview-empty {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text-dim);
+    font-family: var(--body);
+    font-size: 12.5px;
+    color: var(--text-faint);
     font-style: italic;
   }
 
   .preview-tag {
-    font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: 0.06em;
+    font-family: var(--body);
+    font-size: 11px;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--text-dim);
+    color: var(--blood-bright);
   }
 
   .count-block {
@@ -171,44 +218,65 @@
   }
 
   .count-number {
-    font-family: var(--serif);
-    font-size: 30px;
+    font-family: var(--display);
+    font-size: 34px;
+    font-weight: 600;
     color: var(--blood-bright);
     line-height: 1;
   }
 
   .count-label {
-    font-family: var(--mono);
+    font-family: var(--body);
     font-size: 12px;
-    letter-spacing: 0.1em;
+    font-weight: 700;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--text);
-    font-weight: bold !important;
+    color: var(--text-dim);
   }
 
-  .footer-link {
-    text-align: center;
-    padding: 4px 0 2px;
-  }
+  .footer { padding: 8px 20px 18px; }
 
-  .footer-link a {
-    font-family: var(--mono);
-    font-size: 15px;
-    letter-spacing: 0.06em;
-    color: var(--text);
+  .settings-btn {
+    display: block;
+    margin: 0 auto;
+    padding: 9px 30px;
+    font-family: var(--body);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--blood-bright);
+    background: rgba(138,28,28,0.10);
+    border: 1px solid var(--blood-dim);
+    border-radius: 999px;
     text-decoration: none;
-    font-weight: bold !important;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
   }
 
-  .footer-link a:hover { color: var(--blood-bright); }
+  .settings-btn:hover {
+    background: var(--blood);
+    border-color: var(--blood);
+    color: #f5ebe4;
+  }
+
+  .settings-btn:active { transform: scale(0.97); }
+
+  .settings-btn:focus-visible {
+    outline: 2px solid var(--blood-bright);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
 
   <div class="top">
     <svg class="sigil" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M20 4 L34 30 L6 30 Z" stroke="#8B0000" stroke-width="1.6"/>
-      <circle cx="20" cy="22" r="4.5" stroke="#b81a1a" stroke-width="1.3"/>
+      <path d="M20 4 L34 30 L6 30 Z" stroke="#8a1c1c" stroke-width="1.6"/>
+      <circle cx="20" cy="22" r="4.5" stroke="#c66b5f" stroke-width="1.3"/>
     </svg>
     <h1>Daemon Names Memes</h1>
   </div>
@@ -229,6 +297,7 @@
         <span class="bar-numbers"><span class="used" id="rateUsed">0</span><span class="limit" id="rateLimit">/60 per min</span></span>
       </div>
       <div class="bar-track"><div class="bar-fill" id="rateBar" style="width:0%"></div></div>
+      <div class="bar-total">total <span id="quotaUsed">0</span> API calls</div>
     </div>
 
     <div class="stat-block">
@@ -242,16 +311,14 @@
     </div>
 
     <div class="stat-block count-block">
-      <div>
-        <div class="count-number" id="totalCount">0</div>
-        <div class="count-label">Memes named</div>
-      </div>
+      <div class="count-number" id="totalCount">0</div>
+      <div class="count-label">Memes named</div>
     </div>
 
   </div>
 
-  <div class="footer-link">
-    <a href="#" id="openOptions">Settings</a>
+  <div class="footer">
+    <a href="#" id="openOptions" class="settings-btn">Settings</a>
   </div>
 
 <script src="popup.js"></script>

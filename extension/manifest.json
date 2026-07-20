@@ -1,16 +1,11 @@
 {
   "manifest_version": 3,
   "name": "DAEMON NAMES MEMES",
-  "version": "0.2",
+  "version": "0.3",
   "default_locale": "en",
   "permissions": ["contextMenus", "downloads", "storage"],
   "options_page": "options.html",
-  "host_permissions": [
-    "https://daemon-meme.windown52358.workers.dev/*",
-    "https://x.com/*",
-    "https://reddit.com/*",
-    "https://*.redd.it/*"
-  ],
+  "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
   "icons": {
     "16": "images/icon-16px.png",

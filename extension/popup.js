@@ -7,7 +7,7 @@ const DEFAULTS = {
     claude: { windowStart: 0, count: 0 },
     openai: { windowStart: 0, count: 0 }
   },
-  stats: { totalDownloaded: 0 },
+  stats: { totalDownloaded: 0, totalClassified: 0 },
   lastPreview: null // { imageDataUrl, filenameSlug, isMeme, timestamp }
 };
 
@@ -49,6 +49,7 @@ function render(settings) {
   bar.classList.toggle("warn", pct >= 80);
 
   document.getElementById("totalCount").textContent = settings.stats.totalDownloaded;
+  document.getElementById("quotaUsed").textContent = settings.stats.totalClassified;
 
   const thumb = document.getElementById("previewThumb");
   const info = document.getElementById("previewInfo");
