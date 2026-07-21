@@ -1,11 +1,16 @@
 const DEFAULTS = {
-  apiProvider: "google",
-  apiKeys: { google: "", claude: "", openai: "" },
-  rateLimits: { google: 60, claude: 20, openai: 20 },
+  apiProvider: "worker",
+  apiKeys: { google: "", claude: "", openai: "", openrouter: "", groq: "", mistral: "", xai: "" },
+  rateLimits: { google: 0, claude: 0, openai: 0, openrouter: 0, groq: 0, mistral: 0, xai: 0 },
   rateLimitUsage: {
+    worker: { windowStart: 0, count: 0 },
     google: { windowStart: 0, count: 0 },
     claude: { windowStart: 0, count: 0 },
-    openai: { windowStart: 0, count: 0 }
+    openai: { windowStart: 0, count: 0 },
+    openrouter: { windowStart: 0, count: 0 },
+    groq: { windowStart: 0, count: 0 },
+    mistral: { windowStart: 0, count: 0 },
+    xai: { windowStart: 0, count: 0 }
   },
   stats: { totalDownloaded: 0, totalClassified: 0 },
   namingPrefix: "",
@@ -14,10 +19,19 @@ const DEFAULTS = {
 
 const WORKER_URL = "https://daemon-meme.windown52358.workers.dev";
 
-const MODELS = {
-  google: "gemini-3.1-flash-lite",
-  claude: "claude-3-5-haiku-latest",
-  openai: "gpt-4o-mini"
+// Enforced server-side by the worker itself, so it can't be raised from the extension.
+const WORKER_RATE_LIMIT = 5;
+
+const GOOGLE_MODEL = "gemini-3.1-flash-lite";
+const CLAUDE_MODEL = "claude-3-5-haiku-latest";
+
+// Providers that speak the OpenAI chat-completions protocol (Bearer key, image_url content parts).
+const OPENAI_COMPATIBLE = {
+  openai:     { endpoint: "https://api.openai.com/v1/chat/completions",       model: "gpt-4o-mini" },
+  openrouter: { endpoint: "https://openrouter.ai/api/v1/chat/completions",    model: "openai/gpt-4o-mini" },
+  groq:       { endpoint: "https://api.groq.com/openai/v1/chat/completions",  model: "llama-3.2-90b-vision-preview" },
+  mistral:    { endpoint: "https://api.mistral.ai/v1/chat/completions",       model: "pixtral-12b-2409" },
+  xai:        { endpoint: "https://api.x.ai/v1/chat/completions",             model: "grok-2-vision-1212" }
 };
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -56,7 +70,7 @@ function parseMemeInfo(rawText) {
 
 async function classifyWithGoogle(base64, mimeType, locale, apiKey) {
   const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODELS.google}:generateContent`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_MODEL}:generateContent`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -86,7 +100,7 @@ async function classifyWithClaude(base64, mimeType, locale, apiKey) {
       "anthropic-dangerous-direct-browser-access": "true"
     },
     body: JSON.stringify({
-      model: MODELS.claude,
+      model: CLAUDE_MODEL,
       max_tokens: 300,
       messages: [{
         role: "user",
@@ -102,12 +116,12 @@ async function classifyWithClaude(base64, mimeType, locale, apiKey) {
   return parseMemeInfo(text);
 }
 
-async function classifyWithOpenAI(base64, mimeType, locale, apiKey) {
-  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+async function classifyOpenAICompatible(endpoint, model, base64, mimeType, locale, apiKey) {
+  const resp = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: MODELS.openai,
+      model,
       response_format: { type: "json_object" },
       messages: [{
         role: "user",
@@ -128,29 +142,31 @@ async function classifyWithWorker(base64, mimeType, locale) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ image: base64, mimeType, locale })
   });
+  if (!resp.ok) throw new Error(`Daemon worker error: ${resp.status}`);
   return await resp.json();
 }
 
-const CLASSIFIERS = {
-  google: classifyWithGoogle,
-  claude: classifyWithClaude,
-  openai: classifyWithOpenAI
-};
-
-async function classifyImage(base64, mimeType, locale, settings) {
+// Which engine actually runs: the selected one if usable, otherwise the Daemon worker.
+function resolveProvider(settings) {
   const provider = settings.apiProvider;
+  if (provider === "worker") return "worker";
+  if (settings.apiKeys?.[provider]) return provider;
+  return "worker";
+}
+
+async function classifyWith(provider, base64, mimeType, locale, settings) {
   const apiKey = settings.apiKeys?.[provider];
 
-  if (apiKey) {
-    const info = await CLASSIFIERS[provider](base64, mimeType, locale, apiKey);
-    return { info, viaWorker: false };
-  }
+  if (provider === "worker") return classifyWithWorker(base64, mimeType, locale);
+  if (provider === "google") return classifyWithGoogle(base64, mimeType, locale, apiKey);
+  if (provider === "claude") return classifyWithClaude(base64, mimeType, locale, apiKey);
 
-  const info = await classifyWithWorker(base64, mimeType, locale);
-  return { info, viaWorker: true };
+  const cfg = OPENAI_COMPATIBLE[provider];
+  return classifyOpenAICompatible(cfg.endpoint, cfg.model, base64, mimeType, locale, apiKey);
 }
 
 function isRateLimited(usage, limit, now = Date.now()) {
+  if (!limit || limit <= 0) return false; // 0 (or unset) means no limit
   const withinWindow = usage && now - usage.windowStart < 60000;
   const count = withinWindow ? usage.count : 0;
   return count >= limit;
@@ -187,7 +203,7 @@ function dateStamp(format) {
   return sanitizeFilename(formatDate(new Date(), format));
 }
 
-async function recordStats(memeInfo, imageBlob, provider, countUsage) {
+async function recordStats(memeInfo, imageBlob, provider) {
   const { stats, rateLimitUsage } = await chrome.storage.local.get(["stats", "rateLimitUsage"]);
 
   const newStats = {
@@ -196,28 +212,24 @@ async function recordStats(memeInfo, imageBlob, provider, countUsage) {
   };
 
   const now = Date.now();
-  const toStore = {
+  const usage = rateLimitUsage?.[provider] || { windowStart: 0, count: 0 };
+  const withinWindow = now - usage.windowStart < 60000;
+
+  chrome.storage.local.set({
     stats: newStats,
+    rateLimitUsage: {
+      ...rateLimitUsage,
+      [provider]: withinWindow
+        ? { windowStart: usage.windowStart, count: usage.count + 1 }
+        : { windowStart: now, count: 1 }
+    },
     lastPreview: {
       imageDataUrl: `data:${imageBlob.type};base64,${await blobToBase64(imageBlob)}`,
       filenameSlug: memeInfo.filenameSlug,
       isMeme: memeInfo.isMeme,
       timestamp: now
     }
-  };
-
-  if (countUsage) {
-    const usage = rateLimitUsage?.[provider] || { windowStart: 0, count: 0 };
-    const withinWindow = now - usage.windowStart < 60000;
-    toStore.rateLimitUsage = {
-      ...rateLimitUsage,
-      [provider]: withinWindow
-        ? { windowStart: usage.windowStart, count: usage.count + 1 }
-        : { windowStart: now, count: 1 }
-    };
-  }
-
-  chrome.storage.local.set(toStore);
+  });
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -225,7 +237,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
   try {
     const settings = await chrome.storage.local.get(DEFAULTS);
-    const provider = settings.apiProvider;
+    const provider = resolveProvider(settings);
     const prefix = settings.namingPrefix ? `${settings.namingPrefix}_` : "";
 
     const imgResp = await fetch(info.srcUrl);
@@ -233,22 +245,22 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const ext = blob.type.split("/")[1] || "jpg";
     const fallbackFilename = `${prefix}${dateStamp(settings.dateFormat)}.${ext}`;
 
-    const hasKey = !!settings.apiKeys?.[provider];
-    if (hasKey && isRateLimited(settings.rateLimitUsage?.[provider], settings.rateLimits[provider])) {
+    const limit = provider === "worker" ? WORKER_RATE_LIMIT : settings.rateLimits[provider];
+    if (isRateLimited(settings.rateLimitUsage?.[provider], limit)) {
       chrome.downloads.download({ url: info.srcUrl, filename: fallbackFilename });
       return;
     }
 
     const base64 = await blobToBase64(blob);
     const locale = chrome.i18n.getUILanguage();
-    const { info: memeInfo, viaWorker } = await classifyImage(base64, blob.type, locale, settings);
+    const memeInfo = await classifyWith(provider, base64, blob.type, locale, settings);
 
     const filename = memeInfo.isMeme
       ? `${prefix}${sanitizeFilename(memeInfo.filenameSlug)}.${ext}`
       : fallbackFilename;
 
     chrome.downloads.download({ url: info.srcUrl, filename });
-    await recordStats(memeInfo, blob, provider, !viaWorker);
+    await recordStats(memeInfo, blob, provider);
   } catch (err) {
     console.error("Meme classify failed:", err);
     chrome.downloads.download({ url: info.srcUrl });
