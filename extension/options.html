@@ -96,18 +96,15 @@
     margin: 0 0 6px;
   }
 
-  .col-side .section-title { font-size: 16px; }
-
   .section-hint {
     font-family: var(--body);
     font-size: 13px;
+    font-weight: 600;
     line-height: 1.6;
     color: var(--text-dim);
     max-width: 60ch;
     margin: 0 0 4px;
   }
-
-  .section-hint strong { color: var(--text); font-weight: 700; }
 
   .provider-grid {
     display: grid;
@@ -307,11 +304,9 @@
   label.plain {
     display: block;
     font-family: var(--body);
-    font-size: 11.5px;
+    font-size: 13px;
     font-weight: 600;
-    letter-spacing: 0.05em;
-    line-height: 1.5;
-    text-transform: none;
+    line-height: 1.6;
     color: var(--text-dim);
     margin: 4px 0 10px;
   }
@@ -440,7 +435,7 @@
     <div class="col-providers">
       <div class="eyebrow">Invocation</div>
       <div class="section-title">API provider</div>
-      <p class="section-hint">Choose the engine that classifies your images. Your own API keys run with <strong>no limit</strong> by default; the shared Daemon server is capped. Rate is calls per minute — <strong>0 = no limit</strong>.</p>
+      <p class="section-hint">Choose the engine that classifies your images. Your own API keys run with no limit by default; the shared Daemon server is capped. Rate is calls per minute — 0 = no limit.</p>
       <div class="provider-grid" id="providerGrid"></div>
     </div>
 

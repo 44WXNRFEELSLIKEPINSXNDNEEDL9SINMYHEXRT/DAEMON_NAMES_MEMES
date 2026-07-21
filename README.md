@@ -6,69 +6,82 @@
 
 <a id="english"></a>
 
-> Rename the images you save from the web with meaningful, meme-aware filenames — powered by AI vision models.
+## For users
 
-Right-click any image on a page → **Save image as meme**. The extension asks a vision model whether it's a meme and, if so, downloads it under a short, descriptive name (e.g. `distracted-boyfriend.jpg`) instead of a random hash. Non-memes get a clean date-based name.
+### What is this
 
-## How it works
+You know how every picture you save ends up named something like `image (47).png` or `IMG_20260721.jpg`? This extension fixes that. Right click any image on a page, pick "Save image as meme", and it works out what the picture is and saves it with a name that actually makes sense.
 
-1. You right-click an image and choose **Save image as meme**.
-2. The extension fetches the image and sends it to the selected classifier — your own API key, or the shared Daemon server.
-3. The classifier replies with `{ isMeme, filenameSlug, tags }`.
-4. The image is downloaded:
-   - **Meme** → `<prefix><slug>.<ext>` — the slug is written in the meme's own language and script (Latin, Cyrillic, Arabic, Hangul, …).
-   - **Not a meme** → `<prefix><date>.<ext>` using your chosen date format.
+If it's a meme, you get a short description like `distracted-boyfriend.jpg`. And here's the nice part: it keeps the language of the text in the meme. So a Russian meme gets a Russian name, a Japanese one gets a Japanese name, and so on. If it's not a meme, you get a clean date instead of a random string of numbers.
 
-## Features
+### What it can do
 
-- **Multiple AI providers** — bring your own key for Google (Gemini), Anthropic (Claude), OpenAI, OpenRouter, Groq, Mistral, or xAI (Grok); or use the shared **Daemon** server with no key at all.
-- **Rate limiting** — per-minute caps per provider. Your own keys default to **no limit** (`0`); the shared Daemon server is capped at **5/min and enforced server-side**, so it can't be bypassed from the extension.
-- **Filename prefix** — an optional prefix prepended to every renamed file.
-- **Date format** — choose how non-meme filenames are dated (system, ISO, DD-MM-YYYY, MM-DD-YYYY, long).
-- **Native-script names** — meme slugs preserve the language of the text in the image.
-- **Live stats popup** — active provider & key, rate-limit usage, total API calls, memes named, and a preview of the last classified image.
-- **Bilingual UI** — English and Russian.
+- Works with plenty of AI providers. Use your own key for Google, Anthropic, OpenAI, OpenRouter, Groq, Mistral, or xAI. Or just use the shared Daemon server and skip the key entirely.
+- Smart limits. Your own keys have no limit by default. The shared Daemon server is capped at 5 calls a minute, and that cap is enforced on the server, so it can't be cheated.
+- Optional prefix. Add a prefix to every file you rename, or leave it blank.
+- Pick your date format for the files that aren't memes: system, ISO, DD-MM-YYYY, MM-DD-YYYY, or the long form.
+- A little dashboard in the popup shows your active provider, how much of the limit you've used, total calls, memes named, and the last image you classified.
+- The whole thing is available in English and Russian.
 
-## Providers
+### How to start
 
-| Provider | Key needed | Default limit | Notes |
+1. Open `chrome://extensions` in any browser built on Chromium.
+2. Turn on Developer mode.
+3. Click "Load unpacked" and pick the `extension` folder.
+
+That's it. Now right click any image and choose "Save image as meme".
+
+### Which provider should I pick
+
+If you just want it to work without signing up for anything, stick with Daemon. It's the default and needs no key.
+
+If you have your own API key and want more speed or a specific model, open the popup, click Settings, and choose your provider. Paste the key, and you're set. Here's the lineup:
+
+| Provider | Needs a key | Default limit | Good to know |
 |---|---|---|---|
-| **Daemon** | No | 5/min (server-enforced) | Default. Shared Cloudflare Worker using Gemini. |
+| Daemon | No | 5 per minute (server side) | The default. Runs on a shared server with Gemini. |
 | Google | Yes | No limit | Gemini vision |
 | Anthropic | Yes | No limit | Claude vision |
 | OpenAI | Yes | No limit | GPT vision |
-| OpenRouter | Yes | No limit | Many models, one key |
-| Groq | Yes | No limit | Llama vision, fast |
+| OpenRouter | Yes | No limit | One key for lots of models |
+| Groq | Yes | No limit | Llama vision, very fast |
 | Mistral | Yes | No limit | Pixtral vision |
 | xAI | Yes | No limit | Grok vision |
 
-## Project structure
+Your keys stay in your browser. They only ever go to the provider you picked.
+
+---
+
+## For developers
+
+### How it works under the hood
+
+1. You right click an image and pick "Save image as meme".
+2. The extension grabs the image and sends it to the chosen classifier. That's either your own API key or the shared Daemon server.
+3. The classifier answers with `{ isMeme, filenameSlug, tags }`.
+4. The file gets downloaded:
+   - Meme: `<prefix><slug>.<ext>`. The slug is in the meme's own language and script (Latin, Cyrillic, Arabic, Hangul, and more).
+   - Not a meme: `<prefix><date>.<ext>` in your chosen date format.
+
+### Project layout
 
 ```
 ├── extension/            # Manifest V3 browser extension
 │   ├── background.js     # Service worker: menu, fetch, provider dispatch, rate limits, naming
 │   ├── popup.html/.js    # Stats dashboard
-│   ├── options.html/.js  # Settings (providers, keys, limits, prefix, date format)
+│   ├── options.html/.js  # Settings: providers, keys, limits, prefix, date format
 │   ├── manifest.json
 │   ├── _locales/         # en, ru
 │   └── images/
-└── worker/               # Cloudflare Worker (the "Daemon" server)
-    ├── src/index.ts      # Gemini classification + per-IP rate limiting (Durable Object)
+└── worker/               # Cloudflare Worker, the "Daemon" server
+    ├── src/index.ts      # Gemini classification plus per IP rate limiting (Durable Object)
     ├── wrangler.jsonc
     └── ...
 ```
 
-## Installation
+### Running the Daemon server
 
-### Extension
-
-1. Open `chrome://extensions` (any Chromium-based browser).
-2. Enable **Developer mode**.
-3. Click **Load unpacked** and select the `extension/` folder.
-
-### Worker (Daemon server)
-
-The worker is only needed if you want the keyless **Daemon** provider.
+You only need this if you want the keyless Daemon provider.
 
 ```bash
 cd worker
@@ -77,14 +90,14 @@ npx wrangler secret put GEMINI_API_KEY   # your Google Gemini API key
 npm run deploy
 ```
 
-> The deploy applies a Durable Object migration (`new_sqlite_classes`) used for server-side rate limiting. On the free plan this requires SQLite-backed Durable Objects, which the config already uses.
+Note: the deploy applies a Durable Object migration (`new_sqlite_classes`) that powers the server side rate limiting. On the free plan this needs SQLite backed Durable Objects, which the config already uses.
 
-## Configuration
+### Configuration
 
-- **API keys & provider** — open the extension's options page (popup → **Settings**). Keys are stored locally in your browser and sent only to the chosen provider.
-- **Worker secrets** — `GEMINI_API_KEY` is set via `wrangler secret put` and is never exposed to the extension.
+- API keys and provider: open the extension's options page (popup, then Settings). Keys are stored locally in the browser and only sent to the chosen provider.
+- Worker secrets: `GEMINI_API_KEY` is set with `wrangler secret put` and never reaches the extension.
 
-## Development
+### Development
 
 ```bash
 cd worker
@@ -92,91 +105,104 @@ npm run dev      # local worker (wrangler dev)
 npm test         # vitest
 ```
 
-The extension has no build step — reload it from `chrome://extensions` after editing.
+The extension has no build step. After editing, just reload it from `chrome://extensions`.
 
 ---
 
 <a id="russian"></a>
 
-> Переименовывайте сохраняемые из интернета изображения, давая им осмысленные имена на основе мемов — с помощью ИИ-моделей зрения.
+## Для пользователей
 
-Нажмите правой кнопкой мыши на любое изображение на странице → **Сохранить изображение как мем**. Расширение спросит модель зрения, мем ли это, и если да — загрузит файл с коротким описательным именем (например, `distracted-boyfriend.jpg`) вместо случайного хэша. Не-мемы получают аккуратное имя на основе даты.
+### Что это
 
-## Как это работает
+Знакомо, когда каждая сохранённая картинка называется вроде `image (47).png` или `IMG_20260721.jpg`? Это расширение это чинит. Нажимаете правой кнопкой на любое изображение, выбираете «Сохранить изображение как мем», и расширение само понимает, что на картинке, и сохраняет её с нормальным именем.
 
-1. Вы нажимаете правой кнопкой мыши на изображение и выбираете **Сохранить изображение как мем**.
-2. Расширение загружает изображение и отправляет его выбранному классификатору — вашему собственному API-ключу или общему серверу Daemon.
-3. Классификатор возвращает `{ isMeme, filenameSlug, tags }`.
-4. Изображение загружается:
-   - **Мем** → `<префикс><slug>.<ext>` — slug записывается на языке и письменности самого мема (латиница, кириллица, арабица, хангыль, …).
-   - **Не мем** → `<префикс><дата>.<ext>` в выбранном вами формате даты.
+Если это мем, получите короткое описание, например `distracted-boyfriend.jpg`. И вот что приятно: оно сохраняет язык текста в меме. Так русский мем получает русское имя, японский получает японское, и так далее. Если это не мем, вместо случайных цифр будет аккуратная дата.
 
-## Возможности
+### Что оно умеет
 
-- **Несколько ИИ-провайдеров** — используйте свой ключ для Google (Gemini), Anthropic (Claude), OpenAI, OpenRouter, Groq, Mistral или xAI (Grok); либо общий сервер **Daemon** вообще без ключа.
-- **Ограничение частоты** — лимиты в минуту для каждого провайдера. Для ваших ключей по умолчанию **без лимита** (`0`); общий сервер Daemon ограничен **5/мин и контролируется на стороне сервера**, так что обойти это из расширения нельзя.
-- **Префикс имени файла** — необязательный префикс для каждого переименованного файла.
-- **Формат даты** — выберите, как датируются имена не-мемов (системный, ISO, ДД-ММ-ГГГГ, ММ-ДД-ГГГГ, длинный).
-- **Имена на родной письменности** — slug мема сохраняет язык текста на изображении.
-- **Живая статистика во всплывающем окне** — активный провайдер и ключ, использование лимита, всего API-вызовов, сколько мемов названо, превью последнего классифицированного изображения.
-- **Двуязычный интерфейс** — английский и русский.
+- Работает с разными провайдерами ИИ. Используйте свой ключ для Google, Anthropic, OpenAI, OpenRouter, Groq, Mistral или xAI. Или просто используйте общий сервер Daemon и вообще без ключа.
+- Умные лимиты. Ваши собственные ключи по умолчанию без лимита. Общий сервер Daemon ограничен 5 вызовами в минуту, и этот лимит проверяется на сервере, так что обойти его нельзя.
+- Необязательный префикс. Добавьте префикс к каждому переименованному файлу или оставьте пустым.
+- Выберите формат даты для файлов, которые не мемы: системный, ISO, ДД-ММ-ГГГГ, ММ-ДД-ГГГГ или длинный.
+- Небольшая панель во всплывающем окне показывает активного провайдера, сколько лимита использовано, всего вызовов, сколько мемов названо и последнее классифицированное изображение.
+- Всё доступно на английском и русском.
 
-## Провайдеры
+### С чего начать
 
-| Провайдер | Нужен ключ | Лимит по умолчанию | Примечания |
+1. Откройте `chrome://extensions` в любом браузере на Chromium.
+2. Включите режим разработчика.
+3. Нажмите «Загрузить распакованное расширение» и выберите папку `extension`.
+
+Готово. Теперь нажмите правой кнопкой на любое изображение и выберите «Сохранить изображение как мем».
+
+### Какого провайдера выбрать
+
+Если хотите, чтобы просто работало без регистраций, оставайтесь на Daemon. Он по умолчанию и не требует ключа.
+
+Если у вас есть свой ключ API и хочется больше скорости или конкретную модель, откройте всплывающее окно, нажмите Settings и выберите провайдера. Вставьте ключ, и всё. Вот список:
+
+| Провайдер | Нужен ключ | Лимит по умолчанию | Полезно знать |
 |---|---|---|---|
-| **Daemon** | Нет | 5/мин (на сервере) | По умолчанию. Общий Cloudflare Worker на Gemini. |
+| Daemon | Нет | 5 в минуту (на сервере) | По умолчанию. Работает на общем сервере с Gemini. |
 | Google | Да | Без лимита | Gemini vision |
 | Anthropic | Да | Без лимита | Claude vision |
 | OpenAI | Да | Без лимита | GPT vision |
-| OpenRouter | Да | Без лимита | Много моделей, один ключ |
-| Groq | Да | Без лимита | Llama vision, быстрый |
+| OpenRouter | Да | Без лимита | Один ключ для множества моделей |
+| Groq | Да | Без лимита | Llama vision, очень быстрый |
 | Mistral | Да | Без лимита | Pixtral vision |
 | xAI | Да | Без лимита | Grok vision |
 
-## Структура проекта
+Ваши ключи остаются в браузере. Они отправляются только тому провайдеру, которого вы выбрали.
+
+---
+
+## Для разработчиков
+
+### Как это работает внутри
+
+1. Вы нажимаете правой кнопкой на изображение и выбираете «Сохранить изображение как мем».
+2. Расширение загружает изображение и отправляет его выбранному классификатору. Это либо ваш ключ API, либо общий сервер Daemon.
+3. Классификатор отвечает `{ isMeme, filenameSlug, tags }`.
+4. Файл скачивается:
+   - Мем: `<префикс><slug>.<ext>`. Slug на языке и письменности самого мема (латиница, кириллица, арабица, хангыль и другие).
+   - Не мем: `<префикс><дата>.<ext>` в выбранном формате даты.
+
+### Структура проекта
 
 ```
 ├── extension/            # Браузерное расширение Manifest V3
 │   ├── background.js     # Сервис-воркер: меню, загрузка, выбор провайдера, лимиты, имена
 │   ├── popup.html/.js    # Панель статистики
-│   ├── options.html/.js  # Настройки (провайдеры, ключи, лимиты, префикс, формат даты)
+│   ├── options.html/.js  # Настройки: провайдеры, ключи, лимиты, префикс, формат даты
 │   ├── manifest.json
 │   ├── _locales/         # en, ru
 │   └── images/
-└── worker/               # Cloudflare Worker (сервер «Daemon»)
-    ├── src/index.ts      # Классификация Gemini + ограничение по IP (Durable Object)
+└── worker/               # Cloudflare Worker, сервер «Daemon»
+    ├── src/index.ts      # Классификация Gemini и ограничение по IP (Durable Object)
     ├── wrangler.jsonc
     └── ...
 ```
 
-## Установка
+### Запуск сервера Daemon
 
-### Расширение
-
-1. Откройте `chrome://extensions` (любой браузер на Chromium).
-2. Включите **Режим разработчика**.
-3. Нажмите **Загрузить распакованное расширение** и выберите папку `extension/`.
-
-### Worker (сервер Daemon)
-
-Worker нужен только если вы хотите использовать провайдер **Daemon** без ключа.
+Нужно только если вы хотите провайдер Daemon без ключа.
 
 ```bash
 cd worker
 npm install
-npx wrangler secret put GEMINI_API_KEY   # ваш API-ключ Google Gemini
+npx wrangler secret put GEMINI_API_KEY   # ваш ключ API Google Gemini
 npm run deploy
 ```
 
-> При деплое применяется миграция Durable Object (`new_sqlite_classes`), используемая для ограничения частоты на стороне сервера. На бесплатном тарифе требуются Durable Objects на базе SQLite — конфигурация уже использует их.
+Примечание: при деплое применяется миграция Durable Object (`new_sqlite_classes`), которая обеспечивает ограничение частоты на сервере. На бесплатном тарифе нужны Durable Objects на базе SQLite, конфигурация уже их использует.
 
-## Конфигурация
+### Конфигурация
 
-- **API-ключи и провайдер** — откройте страницу настроек расширения (всплывающее окно → **Settings**). Ключи хранятся локально в браузере и отправляются только выбранному провайдеру.
-- **Секреты Worker** — `GEMINI_API_KEY` задаётся через `wrangler secret put` и никогда не передаётся расширению.
+- Ключи API и провайдер: откройте страницу настроек расширения (всплывающее окно, затем Settings). Ключи хранятся локально в браузере и отправляются только выбранному провайдеру.
+- Секреты Worker: `GEMINI_API_KEY` задаётся через `wrangler secret put` и никогда не попадает в расширение.
 
-## Разработка
+### Разработка
 
 ```bash
 cd worker
@@ -184,4 +210,4 @@ npm run dev      # локальный worker (wrangler dev)
 npm test         # vitest
 ```
 
-У расширения нет шага сборки — после правок просто перезагрузите его на `chrome://extensions`.
+У расширения нет шага сборки. После правок просто перезагрузите его на `chrome://extensions`.
