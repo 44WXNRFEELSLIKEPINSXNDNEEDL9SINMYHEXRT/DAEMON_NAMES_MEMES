@@ -1,12 +1,21 @@
 {
   "manifest_version": 3,
   "name": "DAEMON NAMES MEMES",
-  "version": "0.1",
+  "version": "0.3",
+  "default_locale": "en",
   "permissions": ["contextMenus", "downloads", "storage"],
-  "host_permissions": [
-    "https://your-proxy.workers.dev/*",
-    "https://x.com/*",
-    "https://reddit.com/*"
-  ],
-  "background": { "service_worker": "background.js" }
+  "options_page": "options.html",
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "icons": {
+    "16": "images/icon-16px.png",
+    "128": "images/icon-128px.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/icon-16px.png",
+      "32": "images/icon-32px.png"
+  }
+  }
 }

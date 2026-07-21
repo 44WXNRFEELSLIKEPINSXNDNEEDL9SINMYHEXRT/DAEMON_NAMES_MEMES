@@ -1,0 +1,6 @@
+{
+  "contextMenuTitle": {
+    "message": "Save image as meme",
+    "description": "Context menu item for downloading an image as a meme"
+  }
+}

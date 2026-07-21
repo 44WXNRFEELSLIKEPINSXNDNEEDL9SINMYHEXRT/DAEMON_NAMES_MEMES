@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Daemon Names Memes: Settings</title>
+<style>
+  :root {
+    --bg: #0d0a09;
+    --panel: #181210;
+    --panel-border: #33201c;
+    --panel-border-hi: #4a2b25;
+    --blood: #8a1c1c;
+    --blood-bright: #c66b5f;
+    --blood-dim: #532320;
+    --text: #ded4cc;
+    --text-dim: #ab9c92;
+    --text-faint: #8d7f76;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    --body: "Avenir Next", "Avenir", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", "Noto Sans", sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", "Roboto Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background:
+      radial-gradient(90% 50% at 50% -10%, rgba(138,28,28,0.10) 0%, transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+    padding: 48px 32px 96px;
+    min-height: 100vh;
+  }
+
+  .wrap { max-width: 1120px; margin: 0 auto; }
+
+  header { text-align: center; margin-bottom: 44px; }
+
+  .sigil {
+    width: 36px;
+    height: 36px;
+    margin: 0 auto 16px;
+    display: block;
+    animation: breathe 4.5s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-size: 32px;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin: 0 0 8px;
+    color: var(--text);
+  }
+
+  .tagline {
+    font-family: var(--body);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 26px;
+    align-items: start;
+  }
+
+  .eyebrow {
+    font-family: var(--body);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--blood-bright);
+    margin-bottom: 5px;
+  }
+
+  .section-title {
+    font-family: var(--body);
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text);
+    margin: 0 0 6px;
+  }
+
+  .col-side .section-title { font-size: 16px; }
+
+  .section-hint {
+    font-family: var(--body);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-dim);
+    max-width: 60ch;
+    margin: 0 0 4px;
+  }
+
+  .section-hint strong { color: var(--text); font-weight: 700; }
+
+  .provider-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    margin-top: 18px;
+  }
+
+  .provider {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  }
+
+  .provider:hover {
+    border-color: var(--panel-border-hi);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  }
+
+  .provider.is-active {
+    border-color: var(--blood-dim);
+    background: rgba(138,28,28,0.08);
+  }
+
+  .provider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 16px;
+  }
+
+  .provider-label {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  input[type="radio"] {
+    accent-color: var(--blood);
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    margin: 0;
+  }
+
+  .provider-name {
+    font-family: var(--body);
+    font-size: 14.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .provider-note {
+    font-family: var(--body);
+    font-size: 12.5px;
+    color: var(--text-dim);
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .active-tag {
+    font-family: var(--body);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--blood-bright);
+    border: 1px solid var(--blood-dim);
+    background: rgba(138,28,28,0.14);
+    padding: 2px 8px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .provider.is-active .active-tag { opacity: 1; }
+
+  .spoiler-toggle {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    border-radius: 7px;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+
+  .spoiler-toggle:hover {
+    color: var(--blood-bright);
+    background: rgba(138,28,28,0.10);
+  }
+
+  .spoiler-toggle .chevron {
+    display: inline-block;
+    font-size: 17px;
+    line-height: 1;
+    transition: transform 0.2s ease;
+  }
+
+  .provider.open .spoiler-toggle .chevron { transform: rotate(90deg); }
+
+  .provider-fields {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 16px 14px 40px;
+    border-top: 1px solid var(--panel-border);
+  }
+
+  .provider.open .provider-fields { display: flex; }
+
+  .key-field { position: relative; }
+
+  input[type="password"],
+  input[type="text"],
+  input[type="number"],
+  select {
+    width: 100%;
+    background: #0f0b0a;
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+    font-size: 13.5px;
+    padding: 9px 12px;
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  input:focus, select:focus {
+    border-color: var(--blood);
+    box-shadow: 0 0 0 3px rgba(138,28,28,0.15);
+  }
+
+  .key-input, .rate-input { font-family: var(--mono); }
+
+  #prefix, #dateFormat { font-family: var(--body); }
+
+  .key-field .key-input { padding-right: 48px; }
+
+  .toggle-visibility {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-faint);
+    font-family: var(--body);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 6px;
+  }
+
+  .toggle-visibility:hover { color: var(--text); }
+
+  .rate-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .rate-input { width: 72px; text-align: right; }
+
+  .rate-unit {
+    font-family: var(--body);
+    font-size: 11px;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+
+  section {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+
+  label.plain {
+    display: block;
+    font-family: var(--body);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    line-height: 1.5;
+    text-transform: none;
+    color: var(--text-dim);
+    margin: 4px 0 10px;
+  }
+
+  .preview {
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    background: #0f0b0a;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+
+  .preview .label { color: var(--text-faint); }
+
+  .col-side {
+    position: sticky;
+    top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .col-side section {
+    background: transparent;
+    border: none;
+    border-left: 2px solid var(--blood-dim);
+    border-radius: 0;
+    padding: 0 0 2px 16px;
+  }
+
+  .side-divider {
+    height: 1px;
+    background: linear-gradient(90deg, var(--blood) 0%, var(--blood-dim) 45%, transparent 100%);
+  }
+
+  .page-actions { margin-top: 28px; }
+
+  button.save {
+    display: block;
+    width: 100%;
+    background: rgba(138,28,28,0.22);
+    color: #edc9bd;
+    border: 1px solid var(--blood-dim);
+    font-family: var(--body);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 14px 0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  button.save:hover {
+    background: var(--blood);
+    border-color: var(--blood);
+    color: #f7ece5;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(138,28,28,0.35);
+  }
+
+  button.save:active { transform: translateY(0) scale(0.98); }
+
+  button.save:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  .toggle-visibility:focus-visible {
+    outline: 2px solid var(--blood-bright);
+    outline-offset: 2px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(12px);
+    background: var(--panel);
+    border: 1px solid var(--blood-dim);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 12px 22px;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    .col-side { position: static; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <svg class="sigil" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M20 3 L31 17 L9 17 Z" stroke="#8a1c1c" stroke-width="1.6"/>
+      <path d="M20 17 L20 36" stroke="#c66b5f" stroke-width="1.6"/>
+      <path d="M13 26 L27 26" stroke="#c66b5f" stroke-width="1.6"/>
+    </svg>
+    <h1>Daemon Names Memes</h1>
+    <div class="tagline">classification &amp; naming settings</div>
+  </header>
+
+  <div class="layout">
+
+    <div class="col-providers">
+      <div class="eyebrow">Invocation</div>
+      <div class="section-title">API provider</div>
+      <p class="section-hint">Choose the engine that classifies your images. Your own API keys run with <strong>no limit</strong> by default; the shared Daemon server is capped. Rate is calls per minute — <strong>0 = no limit</strong>.</p>
+      <div class="provider-grid" id="providerGrid"></div>
+    </div>
+
+    <aside class="col-side">
+
+      <section>
+        <div class="eyebrow">Naming</div>
+        <div class="section-title">Filename prefix</div>
+        <label class="plain" for="prefix">Prepended to every renamed file — leave empty for none</label>
+        <input type="text" id="prefix" placeholder="none">
+      </section>
+
+      <div class="side-divider"></div>
+
+      <section>
+        <div class="eyebrow">Timestamp</div>
+        <div class="section-title">Date format</div>
+        <label class="plain" for="dateFormat">Used when a date is embedded in the filename instead of a raw Unix timestamp</label>
+        <select id="dateFormat">
+          <option value="system">System default</option>
+          <option value="iso">2026-07-12 (ISO)</option>
+          <option value="dmy">12-07-2026 (DD-MM-YYYY)</option>
+          <option value="mdy">07-12-2026 (MM-DD-YYYY)</option>
+          <option value="long">12 July 2026</option>
+        </select>
+        <div class="preview"><span class="label">Preview — </span><span id="datePreview"></span></div>
+      </section>
+
+    </aside>
+
+  </div>
+
+  <footer class="page-actions">
+    <button class="save" id="saveBtn">Save settings</button>
+  </footer>
+
+</div>
+
+<div class="toast" id="toast">Settings saved</div>
+
+<script src="options.js"></script>
+</body>
+</html>

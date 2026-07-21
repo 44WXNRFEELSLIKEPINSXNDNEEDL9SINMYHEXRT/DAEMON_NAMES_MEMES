@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Daemon Names Memes</title>
+<style>
+  :root {
+    --bg: #0d0a09;
+    --panel: #181210;
+    --panel-border: #33201c;
+    --panel-border-hi: #4a2b25;
+    --blood: #8a1c1c;
+    --blood-bright: #c66b5f;
+    --blood-dim: #532320;
+    --text: #ded4cc;
+    --text-dim: #ab9c92;
+    --text-faint: #8d7f76;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    --body: "Avenir Next", "Avenir", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", "Noto Sans", sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", "Roboto Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    width: 340px;
+    margin: 0;
+    background:
+      radial-gradient(90% 50% at 50% -10%, rgba(138,28,28,0.10) 0%, transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .top {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 18px 20px 15px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .sigil {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    animation: breathe 4.5s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+
+  .top h1 {
+    font-family: var(--serif);
+    font-size: 17px;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    margin: 0;
+    color: var(--text);
+  }
+
+  .body {
+    padding: 16px 20px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .stat-block {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 13px 15px;
+    transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .stat-block:hover {
+    border-color: var(--panel-border-hi);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  }
+
+  .eyebrow {
+    font-family: var(--body);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 9px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .provider-chip {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--blood-bright);
+    background: rgba(138,28,28,0.12);
+    border: 1px solid var(--blood-dim);
+    padding: 2px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.03em;
+  }
+
+  .key-value {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text);
+    letter-spacing: 0.02em;
+  }
+
+  .key-value.unset {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--body);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--blood-bright);
+    background: rgba(138,28,28,0.12);
+    border: 1px dashed var(--blood-dim);
+    border-radius: 4px;
+    padding: 6px 10px;
+  }
+
+  .key-value.unset::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--blood-bright);
+    flex-shrink: 0;
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.45; box-shadow: 0 0 0 0 rgba(198,107,95,0.45); }
+    50% { opacity: 1; box-shadow: 0 0 0 4px rgba(198,107,95,0); }
+  }
+
+  .key-value.server {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--body);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 6px 10px;
+  }
+
+  .key-value.server::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-faint);
+    flex-shrink: 0;
+  }
+
+  .bar-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 9px;
+  }
+
+  .bar-numbers {
+    font-family: var(--mono);
+    font-size: 14px;
+  }
+
+  .bar-numbers .used { color: var(--text); font-weight: 600; }
+  .bar-numbers .limit { color: var(--text-faint); font-size: 12px; }
+
+  .bar-track {
+    height: 6px;
+    background: #241a17;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--blood), var(--blood-bright));
+    border-radius: 3px;
+    transition: width 0.35s cubic-bezier(0.22, 0.8, 0.36, 1);
+  }
+
+  .bar-fill.warn { background: linear-gradient(90deg, #a03030, #d0705f); }
+
+  .bar-total {
+    margin-top: 9px;
+    font-family: var(--body);
+    font-size: 12.5px;
+    color: var(--text-faint);
+  }
+
+  .bar-total span {
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--text-dim);
+  }
+
+  .preview-block {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .preview-thumb {
+    width: 84px;
+    height: 84px;
+    border-radius: 6px;
+    border: 1px solid var(--panel-border);
+    background: #120d0c;
+    flex-shrink: 0;
+    object-fit: cover;
+  }
+
+  .preview-info {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .preview-name {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .preview-empty {
+    font-family: var(--body);
+    font-size: 12.5px;
+    color: var(--text-faint);
+    font-style: italic;
+  }
+
+  .preview-tag {
+    font-family: var(--body);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--blood-bright);
+  }
+
+  .count-block {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .count-number {
+    font-family: var(--serif);
+    font-size: 36px;
+    font-weight: 400;
+    color: var(--blood-bright);
+    line-height: 1;
+  }
+
+  .count-label {
+    font-family: var(--body);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .footer { padding: 10px 20px 18px; }
+
+  .settings-btn {
+    display: block;
+    width: 100%;
+    padding: 12px 0;
+    text-align: center;
+    font-family: var(--body);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #edc9bd;
+    background: rgba(138,28,28,0.22);
+    border: 1px solid var(--blood-dim);
+    border-radius: 6px;
+    text-decoration: none;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .settings-btn:hover {
+    background: var(--blood);
+    border-color: var(--blood);
+    color: #f7ece5;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(138,28,28,0.35);
+  }
+
+  .settings-btn:active { transform: translateY(0) scale(0.98); }
+
+  .settings-btn:focus-visible {
+    outline: 2px solid var(--blood-bright);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="top">
+    <svg class="sigil" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M20 3 L31 17 L9 17 Z" stroke="#8a1c1c" stroke-width="1.6"/>
+      <path d="M20 17 L20 36" stroke="#c66b5f" stroke-width="1.6"/>
+      <path d="M13 26 L27 26" stroke="#c66b5f" stroke-width="1.6"/>
+    </svg>
+    <h1>Daemon Names Memes</h1>
+  </div>
+
+  <div class="body">
+
+    <div class="stat-block">
+      <div class="eyebrow">
+        <span>Active key</span>
+        <span class="provider-chip" id="providerChip">google</span>
+      </div>
+      <div class="key-value" id="keyValue">—</div>
+    </div>
+
+    <div class="stat-block">
+      <div class="bar-row">
+        <span class="eyebrow" style="margin-bottom:0;">Rate limit</span>
+        <span class="bar-numbers"><span class="used" id="rateUsed">0</span><span class="limit" id="rateLimit">/60 per min</span></span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" id="rateBar" style="width:0%"></div></div>
+      <div class="bar-total">total <span id="quotaUsed">0</span> API calls</div>
+    </div>
+
+    <div class="stat-block">
+      <div class="eyebrow">Last classified</div>
+      <div class="preview-block">
+        <img class="preview-thumb" id="previewThumb" style="display:none;">
+        <div class="preview-info" id="previewInfo">
+          <span class="preview-empty">No memes classified yet</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-block count-block">
+      <div class="count-number" id="totalCount">0</div>
+      <div class="count-label">Memes named</div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <a href="#" id="openOptions" class="settings-btn">Settings</a>
+  </div>
+
+<script src="popup.js"></script>
+</body>
+</html>
