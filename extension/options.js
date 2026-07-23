@@ -16,7 +16,9 @@ const DEFAULTS = {
   apiKeys: { google: "", claude: "", openai: "", openrouter: "", groq: "", mistral: "", xai: "" },
   rateLimits: { google: 0, claude: 0, openai: 0, openrouter: 0, groq: 0, mistral: 0, xai: 0 },
   namingPrefix: "",
-  dateFormat: "system"
+  dateFormat: "system",
+  downloadMode: "context",
+  saveMethod: "direct"
 };
 
 function formatDate(date, format) {
@@ -105,6 +107,8 @@ function load() {
 
     document.getElementById("prefix").value = settings.namingPrefix || "";
     document.getElementById("dateFormat").value = settings.dateFormat || "system";
+    document.getElementById("downloadMode").value = settings.downloadMode || "context";
+    document.getElementById("saveMethod").value = settings.saveMethod || "direct";
     updateDatePreview();
   });
 }
@@ -125,7 +129,9 @@ function save() {
     apiKeys,
     rateLimits,
     namingPrefix: document.getElementById("prefix").value.trim(),
-    dateFormat: document.getElementById("dateFormat").value
+    dateFormat: document.getElementById("dateFormat").value,
+    downloadMode: document.getElementById("downloadMode").value,
+    saveMethod: document.getElementById("saveMethod").value
   };
 
   chrome.storage.local.set(settings, () => {

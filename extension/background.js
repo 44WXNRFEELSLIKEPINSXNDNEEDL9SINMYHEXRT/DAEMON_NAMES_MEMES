@@ -14,7 +14,9 @@ const DEFAULTS = {
   },
   stats: { totalDownloaded: 0, totalClassified: 0 },
   namingPrefix: "",
-  dateFormat: "system"
+  dateFormat: "system",
+  downloadMode: "context",
+  saveMethod: "direct"
 };
 
 const WORKER_URL = "https://daemon-meme.windown52358.workers.dev";
@@ -239,6 +241,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const settings = await chrome.storage.local.get(DEFAULTS);
     const provider = resolveProvider(settings);
     const prefix = settings.namingPrefix ? `${settings.namingPrefix}_` : "";
+    const saveAs = settings.saveMethod === "saveAs";
 
     const imgResp = await fetch(info.srcUrl);
     const blob = await imgResp.blob();
@@ -247,7 +250,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     const limit = provider === "worker" ? WORKER_RATE_LIMIT : settings.rateLimits[provider];
     if (isRateLimited(settings.rateLimitUsage?.[provider], limit)) {
-      chrome.downloads.download({ url: info.srcUrl, filename: fallbackFilename });
+      chrome.downloads.download({ url: info.srcUrl, filename: fallbackFilename, saveAs });
       return;
     }
 
@@ -259,7 +262,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       ? `${prefix}${sanitizeFilename(memeInfo.filenameSlug)}.${ext}`
       : fallbackFilename;
 
-    chrome.downloads.download({ url: info.srcUrl, filename });
+    chrome.downloads.download({ url: info.srcUrl, filename, saveAs });
     await recordStats(memeInfo, blob, provider);
   } catch (err) {
     console.error("Meme classify failed:", err);
@@ -275,3 +278,60 @@ function blobToBase64(blob) {
     reader.readAsDataURL(blob);
   });
 }
+
+// Auto-rename: intercept every image download, classify, and re-issue with a proper name.
+chrome.downloads.onCreated.addListener(async (item) => {
+  // Skip downloads this extension initiated (context-menu flow or our own re-downloads).
+  if (item.byExtensionId === chrome.runtime.id) return;
+
+  const settings = await chrome.storage.local.get(DEFAULTS);
+  if (settings.downloadMode !== "all") return;
+
+  const isImage =
+    (item.mime && item.mime.startsWith("image/")) ||
+    /\.(png|jpe?g|gif|webp|bmp|avif|svg)$/i.test(item.url);
+  if (!isImage) return;
+
+  // Blob / data URLs can't be re-fetched after cancel — leave them alone.
+  if (item.url.startsWith("blob:") || item.url.startsWith("data:")) return;
+
+  try {
+    await chrome.downloads.cancel(item.id);
+  } catch {
+    return; // Already completed or canceled — nothing to rename.
+  }
+
+  const prefix = settings.namingPrefix ? `${settings.namingPrefix}_` : "";
+  const saveAs = settings.saveMethod === "saveAs";
+  const ext =
+    item.filename && item.filename.includes(".")
+      ? item.filename.split(".").pop()
+      : "jpg";
+  const fallbackFilename = `${prefix}${dateStamp(settings.dateFormat)}.${ext}`;
+
+  try {
+    const provider = resolveProvider(settings);
+    const limit = provider === "worker" ? WORKER_RATE_LIMIT : settings.rateLimits[provider];
+
+    if (isRateLimited(settings.rateLimitUsage?.[provider], limit)) {
+      chrome.downloads.download({ url: item.url, filename: fallbackFilename, saveAs });
+      return;
+    }
+
+    const imgResp = await fetch(item.url);
+    const blob = await imgResp.blob();
+    const base64 = await blobToBase64(blob);
+    const locale = chrome.i18n.getUILanguage();
+    const memeInfo = await classifyWith(provider, base64, blob.type || item.mime, locale, settings);
+
+    const filename = memeInfo.isMeme
+      ? `${prefix}${sanitizeFilename(memeInfo.filenameSlug)}.${ext}`
+      : fallbackFilename;
+
+    chrome.downloads.download({ url: item.url, filename, saveAs });
+    await recordStats(memeInfo, blob, provider);
+  } catch (err) {
+    console.error("Auto-rename failed:", err);
+    chrome.downloads.download({ url: item.url, filename: fallbackFilename, saveAs });
+  }
+});
