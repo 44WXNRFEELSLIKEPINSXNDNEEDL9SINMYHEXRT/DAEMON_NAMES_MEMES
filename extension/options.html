@@ -96,18 +96,15 @@
     margin: 0 0 6px;
   }
 
-  .col-side .section-title { font-size: 16px; }
-
   .section-hint {
     font-family: var(--body);
     font-size: 13px;
+    font-weight: 600;
     line-height: 1.6;
     color: var(--text-dim);
     max-width: 60ch;
     margin: 0 0 4px;
   }
-
-  .section-hint strong { color: var(--text); font-weight: 700; }
 
   .provider-grid {
     display: grid;
@@ -307,11 +304,9 @@
   label.plain {
     display: block;
     font-family: var(--body);
-    font-size: 11.5px;
+    font-size: 13px;
     font-weight: 600;
-    letter-spacing: 0.05em;
-    line-height: 1.5;
-    text-transform: none;
+    line-height: 1.6;
     color: var(--text-dim);
     margin: 4px 0 10px;
   }
@@ -427,9 +422,10 @@
 
   <header>
     <svg class="sigil" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M20 3 L31 17 L9 17 Z" stroke="#8a1c1c" stroke-width="1.6"/>
-      <path d="M20 17 L20 36" stroke="#c66b5f" stroke-width="1.6"/>
-      <path d="M13 26 L27 26" stroke="#c66b5f" stroke-width="1.6"/>
+      <path d="M20 2 L20 20" stroke="#8a1c1c" stroke-width="2.4"/>
+      <path d="M14 8 L26 8" stroke="#8a1c1c" stroke-width="2.4"/>
+      <path d="M11 15 L29 15" stroke="#8a1c1c" stroke-width="2.4"/>
+      <path d="M9 26 C9 20 16 20 20 26 C24 32 31 32 31 26 C31 20 24 20 20 26 C16 32 9 32 9 26 Z" stroke="#8a1c1c" stroke-width="2.2" fill="none"/>
     </svg>
     <h1>Daemon Names Memes</h1>
     <div class="tagline">classification &amp; naming settings</div>
@@ -440,7 +436,7 @@
     <div class="col-providers">
       <div class="eyebrow">Invocation</div>
       <div class="section-title">API provider</div>
-      <p class="section-hint">Choose the engine that classifies your images. Your own API keys run with <strong>no limit</strong> by default; the shared Daemon server is capped. Rate is calls per minute — <strong>0 = no limit</strong>.</p>
+      <p class="section-hint">Choose the engine that classifies your images. Your own API keys run with no limit by default; the shared Daemon server is capped. Rate is calls per minute — 0 = no limit.</p>
       <div class="provider-grid" id="providerGrid"></div>
     </div>
 
@@ -467,6 +463,30 @@
           <option value="long">12 July 2026</option>
         </select>
         <div class="preview"><span class="label">Preview — </span><span id="datePreview"></span></div>
+      </section>
+
+      <div class="side-divider"></div>
+
+      <section>
+        <div class="eyebrow">Trigger</div>
+        <div class="section-title">Download mode</div>
+        <label class="plain" for="downloadMode">When to classify and rename images</label>
+        <select id="downloadMode">
+          <option value="context">Right-click only</option>
+          <option value="all">All image downloads</option>
+        </select>
+      </section>
+
+      <div class="side-divider"></div>
+
+      <section>
+        <div class="eyebrow">Destination</div>
+        <div class="section-title">Save method</div>
+        <label class="plain" for="saveMethod">How renamed files are saved</label>
+        <select id="saveMethod">
+          <option value="direct">Save directly to downloads</option>
+          <option value="saveAs">Ask where to save</option>
+        </select>
       </section>
 
     </aside>
