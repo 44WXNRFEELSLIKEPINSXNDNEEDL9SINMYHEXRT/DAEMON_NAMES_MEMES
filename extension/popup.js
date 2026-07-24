@@ -21,8 +21,7 @@ const DEFAULTS = {
 
 function maskKey(key) {
   if (!key) return null;
-  if (key.length <= 4) return "•".repeat(key.length);
-  return "•".repeat(Math.max(key.length - 4, 4)) + key.slice(-4);
+  return "••••••••" + key.slice(-4);
 }
 
 function currentUsage(usage, windowMs = 60000) {
@@ -52,13 +51,14 @@ function render(settings) {
   }
 
   const bar = document.getElementById("rateBar");
-  document.getElementById("rateUsed").textContent = used;
   if (limit && limit > 0) {
+    document.getElementById("rateUsed").textContent = used;
     document.getElementById("rateLimit").textContent = `/${limit} per min`;
     const pct = Math.min((used / limit) * 100, 100);
     bar.style.width = `${pct}%`;
     bar.classList.toggle("warn", pct >= 80);
   } else {
+    document.getElementById("rateUsed").textContent = "";
     document.getElementById("rateLimit").textContent = "no limit";
     bar.style.width = "0%";
     bar.classList.remove("warn");
