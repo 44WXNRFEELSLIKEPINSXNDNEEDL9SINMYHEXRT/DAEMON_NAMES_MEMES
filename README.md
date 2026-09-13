@@ -1,3 +1,5 @@
+<a id="english"></a>
+
 # Daemon Names Memes
 
 **[English](#english) | [Русский](#russian)**
@@ -269,6 +271,8 @@ The extension has no build step — reload it from `chrome://extensions`.
 # Daemon Names Memes
 
 **[English](#english) | [Русский](#russian)**
+
+---
 
 Браузерное расширение, которое переименовывает картинки при сохранении:
 правый клик на любое изображение → «Сохранить изображение как мем» →
