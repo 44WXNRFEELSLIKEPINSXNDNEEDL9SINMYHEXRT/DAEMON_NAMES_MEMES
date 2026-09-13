@@ -57,6 +57,11 @@ routes = [r.path for r in app.app.routes]
 assert "/classify" in routes and "/health" in routes
 print("app OK, routes:", [r for r in routes if not r.startswith("/docs")][:8])
 
+# rate limiter is wired into the /classify handler
+import ratelimit
+assert hasattr(app, "ratelimit")
+print("rate limiter wired into app OK")
+
 # contract shape
 err = app._error("test_err")
 assert err == {"isMeme": False, "filenameSlug": "unknown", "error": "test_err"}

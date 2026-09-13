@@ -40,6 +40,21 @@ ENABLE_GRADIO_UI = _env_bool("ENABLE_GRADIO_UI", False)  # optional debug UI
 MAX_B64_CHARS = _env_int("MAX_B64_CHARS", 8_000_000)        # ~6 MB raw image
 MAX_REQUEST_BYTES = _env_int("MAX_REQUEST_BYTES", 12_000_000)
 
+# --- Rate limiting --------------------------------------------------------------
+# No auth on this API — it's meant to sit behind chrome-extension:// callers, but
+# it's reachable by anyone who finds the URL. A single shared VLM instance means
+# one abusive client can starve every other caller (20-30s/request already), so
+# this is enabled by default, not opt-in.
+RATE_LIMIT_ENABLED = _env_bool("RATE_LIMIT_ENABLED", True)
+# Sliding window, per-client-IP (X-Forwarded-For if present, else the peer addr —
+# see app.py for the exact resolution order behind a reverse proxy).
+RATE_LIMIT_PER_MINUTE = _env_int("RATE_LIMIT_PER_MINUTE", 10)
+RATE_LIMIT_WINDOW_S = _env_int("RATE_LIMIT_WINDOW_S", 60)
+# Trust X-Forwarded-For for the client IP. Only enable behind a reverse proxy you
+# control (Fly.io, Render, nginx) — on a directly-exposed host this header is
+# spoofable and would let a client bypass the limit by forging it.
+RATE_LIMIT_TRUST_PROXY = _env_bool("RATE_LIMIT_TRUST_PROXY", False)
+
 # --- VLM (Qwen3-VL-4B GGUF) ---------------------------------------------------
 VLM_MODEL_REPO = os.environ.get("VLM_MODEL_REPO", "Qwen/Qwen3-VL-4B-Instruct-GGUF")
 VLM_MODEL_FILE = os.environ.get("VLM_MODEL_FILE", "Qwen3VL-4B-Instruct-Q4_K_M.gguf")

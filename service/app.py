@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse
 import config
 import ocr
 import pipeline
+import ratelimit
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("meme-classifier")
@@ -57,11 +58,27 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 @app.get("/health")
 async def health():
     vlm = pipeline.vlm_status()
-    return {"vlm": vlm, "ocr": ocr.status(), "mode_default": "auto"}
+    return {
+        "vlm": vlm,
+        "ocr": ocr.status(),
+        "mode_default": "auto",
+        "rate_limit": {
+            "enabled": config.RATE_LIMIT_ENABLED,
+            "per_minute": config.RATE_LIMIT_PER_MINUTE,
+            "window_s": config.RATE_LIMIT_WINDOW_S,
+        },
+    }
 
 
 @app.post("/classify")
 async def classify_endpoint(request: Request):
+    allowed, remaining, retry_after = ratelimit.check_and_record(request)
+    if not allowed:
+        log.warning("Rate limit hit for %s", ratelimit.client_key(request))
+        resp = JSONResponse(status_code=429, content=_error("rate_limited"))
+        resp.headers["Retry-After"] = str(int(retry_after) + 1)
+        return resp
+
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > config.MAX_REQUEST_BYTES:
         return JSONResponse(status_code=413, content=_error("payload_too_large"))
@@ -89,7 +106,10 @@ async def classify_endpoint(request: Request):
     result = await anyio.to_thread.run_sync(
         pipeline.classify, image, mime_type, locale, mode
     )
-    return JSONResponse(content=result)
+    resp = JSONResponse(content=result)
+    if remaining >= 0:
+        resp.headers["X-RateLimit-Remaining"] = str(remaining)
+    return resp
 
 
 # --------------------------------------------------------------------------
