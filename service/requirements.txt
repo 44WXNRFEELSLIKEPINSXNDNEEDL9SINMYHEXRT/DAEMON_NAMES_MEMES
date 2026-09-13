@@ -1,0 +1,20 @@
+# Default runtime: VLM (Qwen3-VL GGUF) + RapidOCR (ONNX CPU).
+# Pinned versions tested on Python 3.11 (2026-09). Do not float — CI/host
+# rebuilds must be reproducible.
+# The extra index provides the prebuilt llama-cpp-python CPU wheel
+# (PyPI only ships an sdist that compiles llama.cpp from source).
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
+gradio==6.27.0
+llama-cpp-python==0.3.35
+huggingface-hub==1.31.0
+pillow==12.3.0
+numpy==2.4.6
+fastapi==0.141.1
+uvicorn==0.52.4
+pydantic==2.13.5
+
+# OCR stage (default engine). rapidocr pulls opencv-python + onnxruntime;
+# the Dockerfile installs libGL/libglib system deps for opencv on slim images.
+rapidocr==3.9.2
+onnxruntime==1.30.0

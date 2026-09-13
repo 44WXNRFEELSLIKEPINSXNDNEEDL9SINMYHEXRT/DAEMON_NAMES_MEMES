@@ -1,7 +1,8 @@
 // Providers with a `fixedLimit` are locked: no API key, and the rate is enforced
 // server-side so it can't be changed here.
 const PROVIDERS = [
-  { id: "worker",     name: "Daemon",     note: "Shared server · no key needed", fixedLimit: 5 },
+  { id: "worker",     name: "DAEMON",     note: "Shared server · no key needed", fixedLimit: 5 },
+  { id: "daemon2",    name: "DAEMON2",    note: "Qwen3-VL + OCR", unavailable: true },
   { id: "google",     name: "Google",     note: "Gemini vision" },
   { id: "claude",     name: "Anthropic",  note: "Claude vision" },
   { id: "openai",     name: "OpenAI",     note: "GPT vision" },
@@ -57,7 +58,31 @@ function buildProviderCards() {
 
   grid.innerHTML = PROVIDERS.map(p => {
     const locked = p.fixedLimit != null;
+    const unavailable = p.unavailable === true;
     const note = locked ? `${p.note} · capped ${p.fixedLimit}/min` : p.note;
+
+    if (unavailable) {
+      // No radio, no key/rate fields — purely informational, cannot be selected.
+      return `
+        <div class="provider is-unavailable" data-provider="${p.id}" aria-disabled="true">
+          <div class="provider-row">
+            <span class="provider-label provider-label-disabled">
+              <input type="radio" disabled>
+              <span class="provider-name">${p.name}</span>
+            </span>
+            <span class="provider-note">${note}</span>
+            <span class="unavailable-tag">Unavailable</span>
+          </div>
+          <div class="provider-fields provider-fields-static">
+            <p class="unavailable-hint">
+              Self-hosted two-stage OCR + Qwen3-VL-4B classifier — see <code>service/</code>.
+              No free-tier CPU host fits the ≥4&nbsp;GB RAM footprint, so this provider isn't
+              reachable yet. Cold start isn't the blocker here — it can't be launched anywhere
+              free at all right now. Tracked for a future release once it's actually hosted.
+            </p>
+          </div>
+        </div>`;
+    }
 
     const spoiler = locked
       ? ""
@@ -99,7 +124,7 @@ function load() {
     setActiveProvider(settings.apiProvider);
 
     PROVIDERS.forEach(p => {
-      if (p.fixedLimit != null) return; // locked; no inputs
+      if (p.fixedLimit != null || p.unavailable) return; // locked or unavailable; no inputs
       document.getElementById(`key-${p.id}`).value = settings.apiKeys[p.id] || "";
       const rate = settings.rateLimits[p.id] ?? 0;
       document.getElementById(`rate-${p.id}`).value = rate > 0 ? rate : ""; // blank shows "no limit"
@@ -119,7 +144,7 @@ function save() {
   const apiKeys = {};
   const rateLimits = {};
   PROVIDERS.forEach(p => {
-    if (p.fixedLimit != null) return; // locked; server-enforced
+    if (p.fixedLimit != null || p.unavailable) return; // locked or unavailable; server-enforced / no inputs
     apiKeys[p.id] = document.getElementById(`key-${p.id}`).value.trim();
     rateLimits[p.id] = Number(document.getElementById(`rate-${p.id}`).value) || 0;
   });
@@ -151,6 +176,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Clicking anywhere on a card selects that provider (except when using its inputs).
   document.querySelectorAll(".provider").forEach(card => {
+    if (card.classList.contains("is-unavailable")) return; // not selectable
     card.addEventListener("click", (e) => {
       if (e.target.closest("input, button, select, summary")) return;
       const radio = card.querySelector('input[name="apiProvider"]');
