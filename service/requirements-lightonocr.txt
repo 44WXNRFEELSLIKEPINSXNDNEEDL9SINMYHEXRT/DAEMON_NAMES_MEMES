@@ -1,0 +1,14 @@
+# OPTIONAL: LightOnOCR-2-1B engine (OCR_ENGINE=lightonocr).
+# Installs torch + transformers>=5 — ~3 GB of packages and ~2 GB extra RAM at
+# inference. Only needed to A/B-benchmark against RapidOCR; the default
+# requirements.txt does NOT include this.
+#
+#   pip install -r requirements.txt -r requirements-lightonocr.txt
+#
+# Versions pinned per LightOnOCR-2 model card (transformers>=5 required for
+# LightOnOcrForConditionalGeneration). CPU-only torch wheel keeps it smaller:
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.14.0
+transformers==5.17.0
+accelerate==1.15.0

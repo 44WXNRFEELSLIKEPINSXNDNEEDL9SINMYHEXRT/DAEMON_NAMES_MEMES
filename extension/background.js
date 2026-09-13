@@ -234,6 +234,116 @@ async function recordStats(memeInfo, imageBlob, provider) {
   });
 }
 
+// Chrome's Save As dialog opens in the directory of the suggested filename and
+// does not remember where the user last saved, so remember it ourselves and
+// pre-select it on the next save. The downloads API only accepts paths
+// relative to the default Downloads folder (absolute paths cause an error), so
+// folders outside of it cannot be pre-selected — that's a Chrome limitation.
+const ROOT_PROBE_FILENAME = "__dnm_root_probe__.txt";
+
+function dirnameOf(filePath) {
+  const sepIndex = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+  return sepIndex <= 0 ? null : filePath.slice(0, sepIndex);
+}
+
+// Discover the absolute path of the default Downloads folder by downloading a
+// throwaway file with a bare suggested name and reading back where it landed.
+function calibrateDownloadsRoot() {
+  return new Promise((resolve) => {
+    chrome.downloads.download(
+      { url: "data:text/plain,root-probe", filename: ROOT_PROBE_FILENAME, saveAs: false },
+      async (probeId) => {
+        if (probeId == null || chrome.runtime.lastError) return resolve(null);
+        let root = null;
+        for (let i = 0; i < 40; i++) {
+          await new Promise((r) => setTimeout(r, 50));
+          const [item] = await chrome.downloads.search({ id: probeId });
+          if (!item) break;
+          if (item.state === "complete") {
+            root = dirnameOf(item.filename || "");
+            break;
+          }
+          if (item.state === "interrupted") break;
+        }
+        chrome.downloads.removeFile({ id: probeId }, () => {
+          void chrome.runtime.lastError;
+          chrome.downloads.erase({ id: probeId }, () => void chrome.runtime.lastError);
+        });
+        resolve(root);
+      }
+    );
+  });
+}
+
+async function getDownloadsRoot() {
+  const { downloadsRoot } = await chrome.storage.local.get("downloadsRoot");
+  if (downloadsRoot) return downloadsRoot;
+  const root = await calibrateDownloadsRoot();
+  if (root) await chrome.storage.local.set({ downloadsRoot: root });
+  return root || null;
+}
+
+async function startDownload({ url, filename, saveAs }) {
+  if (!saveAs) {
+    chrome.downloads.download({ url, filename, saveAs: false });
+    return;
+  }
+
+  const base = filename.split(/[\\/]/).pop();
+  const { lastSaveSubdir } = await chrome.storage.local.get("lastSaveSubdir");
+  const target = lastSaveSubdir ? `${lastSaveSubdir.replace(/[\\/]+$/, "")}/${base}` : base;
+  chrome.downloads.download({ url, filename: target, saveAs: true }, trackSaveAsDownload);
+}
+
+async function trackSaveAsDownload(id) {
+  if (id == null || chrome.runtime.lastError) return;
+  const { pendingSaveAsIds = [] } = await chrome.storage.session.get("pendingSaveAsIds");
+  if (!pendingSaveAsIds.includes(id)) {
+    await chrome.storage.session.set({ pendingSaveAsIds: [...pendingSaveAsIds, id] });
+  }
+}
+
+async function untrackSaveAsDownload(id) {
+  const { pendingSaveAsIds = [] } = await chrome.storage.session.get("pendingSaveAsIds");
+  if (pendingSaveAsIds.includes(id)) {
+    await chrome.storage.session.set({ pendingSaveAsIds: pendingSaveAsIds.filter(x => x !== id) });
+  }
+}
+
+async function rememberSaveSubdirectory(filePath) {
+  const dir = dirnameOf(filePath);
+  if (!dir) return;
+  const root = await getDownloadsRoot();
+  if (!root) return;
+
+  if (dir === root) {
+    await chrome.storage.local.remove("lastSaveSubdir");
+    return;
+  }
+
+  const sep = root.includes("\\") && !root.includes("/") ? "\\" : "/";
+  if (dir.startsWith(root + sep)) {
+    const subdir = dir.slice(root.length + 1).replace(/\\/g, "/");
+    await chrome.storage.local.set({ lastSaveSubdir: subdir });
+  }
+  // A folder outside Downloads can't be suggested to the Save As dialog, so
+  // keep the previous remembered subfolder.
+}
+
+chrome.downloads.onChanged.addListener(async (delta) => {
+  const state = delta.state?.current;
+  if (state !== "complete" && state !== "interrupted") return;
+
+  const { pendingSaveAsIds = [] } = await chrome.storage.session.get("pendingSaveAsIds");
+  if (!pendingSaveAsIds.includes(delta.id)) return;
+
+  if (state === "complete") {
+    const [item] = await chrome.downloads.search({ id: delta.id });
+    if (item?.filename) await rememberSaveSubdirectory(item.filename);
+  }
+  await untrackSaveAsDownload(delta.id);
+});
+
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== "download-as-meme") return;
 
@@ -250,7 +360,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     const limit = provider === "worker" ? WORKER_RATE_LIMIT : settings.rateLimits[provider];
     if (isRateLimited(settings.rateLimitUsage?.[provider], limit)) {
-      chrome.downloads.download({ url: info.srcUrl, filename: fallbackFilename, saveAs });
+      await startDownload({ url: info.srcUrl, filename: fallbackFilename, saveAs });
       return;
     }
 
@@ -262,7 +372,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       ? `${prefix}${sanitizeFilename(memeInfo.filenameSlug)}.${ext}`
       : fallbackFilename;
 
-    chrome.downloads.download({ url: info.srcUrl, filename, saveAs });
+    await startDownload({ url: info.srcUrl, filename, saveAs });
     await recordStats(memeInfo, blob, provider);
   } catch (err) {
     console.error("Meme classify failed:", err);
@@ -314,7 +424,7 @@ chrome.downloads.onCreated.addListener(async (item) => {
     const limit = provider === "worker" ? WORKER_RATE_LIMIT : settings.rateLimits[provider];
 
     if (isRateLimited(settings.rateLimitUsage?.[provider], limit)) {
-      chrome.downloads.download({ url: item.url, filename: fallbackFilename, saveAs });
+      await startDownload({ url: item.url, filename: fallbackFilename, saveAs });
       return;
     }
 
@@ -328,10 +438,10 @@ chrome.downloads.onCreated.addListener(async (item) => {
       ? `${prefix}${sanitizeFilename(memeInfo.filenameSlug)}.${ext}`
       : fallbackFilename;
 
-    chrome.downloads.download({ url: item.url, filename, saveAs });
+    await startDownload({ url: item.url, filename, saveAs });
     await recordStats(memeInfo, blob, provider);
   } catch (err) {
     console.error("Auto-rename failed:", err);
-    chrome.downloads.download({ url: item.url, filename: fallbackFilename, saveAs });
+    await startDownload({ url: item.url, filename: fallbackFilename, saveAs });
   }
 });
