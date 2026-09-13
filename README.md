@@ -39,7 +39,8 @@ This repo contains three parts:
 
 | Provider | Needs a key | Default limit | Good to know |
 |---|---|---|---|
-| Daemon | No | 5 per minute (server side) | The default. Shared server, Gemini. |
+| DAEMON | No | 5 per minute (server side) | The default. Shared server, Gemini. |
+| DAEMON2 | No | — | **Unavailable.** Self-hosted `service/` (Qwen3-VL-4B + OCR) — see below. Shown as a disabled card in Settings; can't be selected until it's actually hosted somewhere. |
 | Google | Yes | No limit | Gemini vision |
 | Anthropic | Yes | No limit | Claude vision |
 | OpenAI | Yes | No limit | GPT vision |
@@ -159,9 +160,32 @@ The 3 GB of model weights download on first boot (mount a volume to make
 restarts instant, or pre-seed `service/models/`). Requirements: **≥ 4 GB RAM**
 (VLM Q4_K_M peaks ~3.5 GB RSS), any x86_64 Docker host, outbound access to
 huggingface.co. CPU-only; expect multi-second latency per request (~20–30 s
-at 384 px on a 4–12-thread CPU) and several-minute cold starts. **This is a
-known constraint of free/cheap CPU hosting, not a bug — do not "fix" it by
-changing the model without discussing it first.**
+at 384 px on a 4–12-thread CPU) and several-minute cold starts. **Cold start
+is not the constraint worth optimizing right now** — see "Deployment
+platforms" below: there's currently no free tier that can even boot this
+container, so a slow boot on a host we can't launch on is moot. Do not "fix"
+the model/quantization to shave latency without discussing it first.
+
+### Rate limiting (self-hosted only)
+
+`service/` has **no authentication** — anyone with the URL can call
+`/classify`, and the single shared VLM already serializes every request
+behind one lock at 20–30 s each. A per-IP sliding-window rate limiter
+(`service/ratelimit.py`) is **enabled by default**: `RATE_LIMIT_PER_MINUTE`
+(default 10), returns `429` + `Retry-After` + the same JSON error contract
+(CORS still present). In-memory, process-local — fine for one instance; see
+`service/README.md` for the full behavior and config knobs. The Cloudflare
+Worker (`worker/`) already has its own server-side limit (5/min, enforced by
+a Durable Object) — this is the equivalent protection for the self-hosted
+path.
+
+### Caching — deliberately not implemented (PoC, not production)
+
+Content-hash → result caching (skip re-classifying an image already seen)
+would cut real cost meaningfully in production, but this is a pet project /
+proof of concept, not a production deployment — there's no traffic pattern
+to justify the complexity yet. **Next goal**, not done now. Tracked as
+future work, not a gap in the current scope.
 
 ### Deployment platforms (portability proof)
 
