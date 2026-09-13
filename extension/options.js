@@ -2,7 +2,7 @@
 // server-side so it can't be changed here.
 const PROVIDERS = [
   { id: "worker",     name: "DAEMON",     note: "Shared server · no key needed", fixedLimit: 5 },
-  { id: "daemon2",    name: "DAEMON2",    note: "Self-hosted Qwen3-VL + OCR · unavailable", unavailable: true },
+  { id: "daemon2",    name: "DAEMON2",    note: "Qwen3-VL + OCR", unavailable: true },
   { id: "google",     name: "Google",     note: "Gemini vision" },
   { id: "claude",     name: "Anthropic",  note: "Claude vision" },
   { id: "openai",     name: "OpenAI",     note: "GPT vision" },
