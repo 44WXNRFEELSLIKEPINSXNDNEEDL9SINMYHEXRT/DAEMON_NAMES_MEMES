@@ -87,7 +87,8 @@ def _locale_language(locale: str | None) -> str:
     return "English"
 
 
-def build_vlm_prompt(locale: str | None, ocr_text: str | None = None) -> str:
+def build_vlm_prompt(locale: str | None, ocr_text: str | None = None,
+                     reject_slug: str | None = None) -> str:
     lang = _locale_language(locale)
     ocr_context = ""
     if ocr_text and ocr_text.strip():
@@ -99,8 +100,18 @@ def build_vlm_prompt(locale: str | None, ocr_text: str | None = None) -> str:
             f"---\n{snippet}\n---\n"
         )
 
+    rejection_context = ""
+    if reject_slug and reject_slug.strip():
+        rejection_context = (
+            f"\nA previous attempt at naming this image produced: "
+            f"'{reject_slug.strip()}'. This was flagged as incorrect by the "
+            f"user. Look at the image again more carefully and produce a "
+            f"different, more accurate description — do not repeat the "
+            f"previous answer or a close variant of it.\n"
+        )
+
     return f"""Analyze the attached image and answer in strict JSON.
-{ocr_context}
+{ocr_context}{rejection_context}
 1. "isMeme": true if the image is a meme — overlaid caption text, a recognizable meme template, a reaction-image format, or clearly satirical/humorous intent. This includes reply-culture formats common on X/TikTok/Reddit: a single symbol, short caption, or stock image used as a reply or punchline. Otherwise false.
 
 2. "filenameSlug": a short description of the image, 3-6 words, lowercase, hyphen-separated (kebab-case), in this exact JSON shape:
@@ -220,14 +231,15 @@ def _wait_for_vlm() -> str | None:
     return None
 
 
-def _vlm_classify(data_uri: str, locale: str | None, ocr_text: str | None) -> dict | None:
+def _vlm_classify(data_uri: str, locale: str | None, ocr_text: str | None,
+                  reject_slug: str | None = None) -> dict | None:
     messages = [
         {"role": "system", "content": "You are a strict JSON image classifier. You respond with a single JSON object and nothing else."},
         {
             "role": "user",
             "content": [
                 {"type": "image_url", "image_url": {"url": data_uri}},
-                {"type": "text", "text": build_vlm_prompt(locale, ocr_text)},
+                {"type": "text", "text": build_vlm_prompt(locale, ocr_text, reject_slug)},
             ],
         },
     ]
@@ -291,90 +303,133 @@ def _preprocess(image_b64: str) -> tuple[Image.Image | None, str | None, str | N
 # --------------------------------------------------------------------------
 def classify(image_b64: str, mime_type: str = "image/png", locale: str = "",
              mode: str = "auto") -> dict:
+    """Thin wrapper over classify_detailed() for callers that only want the
+    {isMeme, filenameSlug[, error]} contract (service/app.py)."""
+    detail = classify_detailed(image_b64, mime_type, locale, mode)
+    return detail["result"]
+
+
+def classify_detailed(image_b64: str, mime_type: str = "image/png", locale: str = "",
+                      mode: str = "auto", reject_slug: str | None = None) -> dict:
     """
-    Full two-stage pipeline. Never raises; returns the JSON error contract.
-    Latency is logged in three separate numbers: ocr=, vlm=, total=.
+    Full two-stage pipeline. Never raises. Returns a dict with the response
+    contract under "result" plus per-stage metadata used by server/ for the
+    metrics log and the correction flow:
+
+        {
+          "result": {"isMeme": bool, "filenameSlug": str} | error contract,
+          "ocr_seconds": float, "vlm_seconds": float, "total_seconds": float,
+          "ocr_text": str, "ocr_confidence": float, "ocr_used": bool,
+          "vlm_ran": bool, "path": "ocr-fast" | "vlm-slug" | "vlm" | "error",
+        }
+
+    reject_slug: when set (correction flow), forces a fresh VLM call with the
+    rejected slug injected as an explicit negative example, and skips the
+    OCR-fast-path shortcut in manual mode (a corrected answer must come from
+    the VLM re-looking at the image, not from re-deriving the same OCR text).
     """
     t_start = time.perf_counter()
     mode = (mode or "auto").strip().lower()
+    meta = {
+        "ocr_seconds": 0.0, "vlm_seconds": 0.0, "total_seconds": 0.0,
+        "ocr_text": "", "ocr_confidence": 0.0, "ocr_used": False,
+        "vlm_ran": False, "path": "error",
+    }
+
+    def done(result: dict) -> dict:
+        meta["total_seconds"] = time.perf_counter() - t_start
+        meta["result"] = result
+        return meta
+
     if mode not in ("manual", "auto"):
-        return _error_response("invalid_mode")
+        return done(_error_response("invalid_mode"))
 
     if not image_b64 or not isinstance(image_b64, str):
-        return _error_response("empty_image")
+        return done(_error_response("empty_image"))
     if len(image_b64) > config.MAX_B64_CHARS:
         log.warning("Rejected oversized base64 payload: %d chars", len(image_b64))
-        return _error_response("payload_too_large")
+        return done(_error_response("payload_too_large"))
 
     img, data_uri, err = _preprocess(image_b64)
     if err:
-        return _error_response(err)
+        return done(_error_response(err))
 
     # ---- Stage 1: OCR pre-pass (both modes) ----
     ocr_res = ocr.ocr_recognize(img)  # type: ignore[arg-type]  # img is not None here
-    ocr_seconds = ocr_res.seconds
+    meta["ocr_seconds"] = ocr_res.seconds
+    meta["ocr_text"] = ocr_res.text
+    meta["ocr_confidence"] = ocr_res.confidence
 
-    # ---- manual mode: OCR fast path ----
-    if mode == "manual":
+    # ---- manual mode: OCR fast path (skipped when correcting) ----
+    if mode == "manual" and not reject_slug:
         if ocr_res.usable:
             slug = slug_from_text(ocr_res.text)
             if slug and slug != "unknown":
-                total = time.perf_counter() - t_start
+                meta["ocr_used"] = True
+                meta["path"] = "ocr-fast"
                 log.info(
                     "classify ok | mode=manual path=ocr-fast | ocr=%.2fs vlm=0.00s total=%.2fs "
                     "| isMeme=True slug=%r conf=%.2f",
-                    ocr_seconds, total, slug, ocr_res.confidence,
+                    ocr_res.seconds, time.perf_counter() - t_start, slug, ocr_res.confidence,
                 )
-                # User chose "save as meme" -> isMeme is True by definition.
-                return {"isMeme": True, "filenameSlug": slug}
-        # Low-confidence / no OCR text -> VLM for the slug only; isMeme=True.
+                return done({"isMeme": True, "filenameSlug": slug})
+
+    if mode == "manual":
+        # Low-confidence / no OCR text / correction in progress -> VLM slug only.
         vlm_err = _wait_for_vlm()
         if vlm_err:
-            # VLM down in manual mode: user intent still says meme. Best-effort
-            # slug from any OCR text, else the fallback contract.
-            slug = slug_from_text(ocr_res.text) if ocr_res.text else ""
-            if slug and slug != "unknown":
-                return {"isMeme": True, "filenameSlug": slug}
-            return _error_response(vlm_err)
+            if not reject_slug:
+                slug = slug_from_text(ocr_res.text) if ocr_res.text else ""
+                if slug and slug != "unknown":
+                    meta["path"] = "ocr-fast-fallback"
+                    return done({"isMeme": True, "filenameSlug": slug})
+            return done(_error_response(vlm_err))
         t_vlm0 = time.perf_counter()
         try:
             parsed = _vlm_classify(data_uri, locale or None,
-                                   ocr_res.text if ocr_res.text.strip() else None)
+                                   ocr_res.text if ocr_res.text.strip() else None,
+                                   reject_slug)
         except Exception as e:  # noqa: BLE001
-            return _error_response(type(e).__name__)
-        t_vlm = time.perf_counter() - t_vlm0
+            return done(_error_response(type(e).__name__))
+        meta["vlm_seconds"] = time.perf_counter() - t_vlm0
+        meta["vlm_ran"] = True
+        meta["path"] = "vlm-slug"
         if parsed is None:
-            return _error_response("bad_model_output")
+            return done(_error_response("bad_model_output"))
         result = {"isMeme": True, "filenameSlug": parsed["filenameSlug"]}
-        total = time.perf_counter() - t_start
         log.info(
             "classify ok | mode=manual path=vlm-slug | ocr=%.2fs vlm=%.2fs total=%.2fs "
             "| isMeme=True slug=%r",
-            ocr_seconds, t_vlm, total, result["filenameSlug"],
+            meta["ocr_seconds"], meta["vlm_seconds"], time.perf_counter() - t_start,
+            result["filenameSlug"],
         )
-        return result
+        return done(result)
 
     # ---- auto mode: VLM always runs (it decides isMeme) ----
+    ocr_injected = ocr_res.usable
+    meta["ocr_used"] = ocr_injected
     vlm_err = _wait_for_vlm()
     if vlm_err:
-        return _error_response(vlm_err)
+        return done(_error_response(vlm_err))
     t_vlm0 = time.perf_counter()
     try:
         parsed = _vlm_classify(data_uri, locale or None,
-                               ocr_res.text if ocr_res.usable else None)
+                               ocr_res.text if ocr_injected else None,
+                               reject_slug)
     except Exception as e:  # noqa: BLE001
-        return _error_response(type(e).__name__)
-    t_vlm = time.perf_counter() - t_vlm0
+        return done(_error_response(type(e).__name__))
+    meta["vlm_seconds"] = time.perf_counter() - t_vlm0
+    meta["vlm_ran"] = True
+    meta["path"] = "vlm"
     if parsed is None:
-        return _error_response("bad_model_output")
-    total = time.perf_counter() - t_start
+        return done(_error_response("bad_model_output"))
     log.info(
         "classify ok | mode=auto ocr_injected=%s | ocr=%.2fs vlm=%.2fs total=%.2fs "
         "| isMeme=%s slug=%r",
-        bool(ocr_res.usable), ocr_seconds, t_vlm, total,
-        parsed["isMeme"], parsed["filenameSlug"],
+        bool(ocr_injected), meta["ocr_seconds"], meta["vlm_seconds"],
+        time.perf_counter() - t_start, parsed["isMeme"], parsed["filenameSlug"],
     )
-    return parsed
+    return done(parsed)
 
 
 def vlm_status() -> dict:

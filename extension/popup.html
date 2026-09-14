@@ -266,6 +266,61 @@
     color: var(--blood-bright);
   }
 
+  .rename-last-btn {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    padding: 9px 0;
+    font-family: var(--body);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #edc9bd;
+    background: rgba(138,28,28,0.18);
+    border: 1px solid var(--blood-dim);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  }
+
+  .rename-last-btn:hover:not(:disabled) {
+    background: var(--blood);
+    border-color: var(--blood);
+    color: #f7ece5;
+    transform: translateY(-1px);
+  }
+
+  .rename-last-btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+
+  .rename-last-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .rename-last-btn:focus-visible {
+    outline: 2px solid var(--blood-bright);
+    outline-offset: 2px;
+  }
+
+  .rename-last-note {
+    font-family: var(--body);
+    font-size: 10.5px;
+    line-height: 1.5;
+    color: var(--text-faint);
+    margin-top: 7px;
+  }
+
+  .rename-last-status {
+    font-family: var(--mono);
+    font-size: 11px;
+    margin-top: 6px;
+    min-height: 14px;
+  }
+
+  .rename-last-status.ok { color: var(--blood-bright); }
+  .rename-last-status.err { color: #d0705f; }
+
   .count-block {
     display: flex;
     align-items: baseline;
@@ -368,6 +423,11 @@
           <span class="preview-empty">No memes classified yet</span>
         </div>
       </div>
+      <button class="rename-last-btn" id="renameLastBtn" disabled>Rename last</button>
+      <div class="rename-last-note" id="renameLastNote">
+        This downloads a corrected copy — you may want to delete the old file.
+      </div>
+      <div class="rename-last-status" id="renameLastStatus"></div>
     </div>
 
     <div class="stat-block count-block">

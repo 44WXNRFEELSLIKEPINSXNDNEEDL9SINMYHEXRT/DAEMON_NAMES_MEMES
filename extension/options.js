@@ -19,7 +19,8 @@ const DEFAULTS = {
   namingPrefix: "",
   dateFormat: "system",
   downloadMode: "context",
-  saveMethod: "direct"
+  saveMethod: "direct",
+  gatewayUrl: ""
 };
 
 function formatDate(date, format) {
@@ -134,6 +135,7 @@ function load() {
     document.getElementById("dateFormat").value = settings.dateFormat || "system";
     document.getElementById("downloadMode").value = settings.downloadMode || "context";
     document.getElementById("saveMethod").value = settings.saveMethod || "direct";
+    document.getElementById("gatewayUrl").value = settings.gatewayUrl || "";
     updateDatePreview();
   });
 }
@@ -156,7 +158,8 @@ function save() {
     namingPrefix: document.getElementById("prefix").value.trim(),
     dateFormat: document.getElementById("dateFormat").value,
     downloadMode: document.getElementById("downloadMode").value,
-    saveMethod: document.getElementById("saveMethod").value
+    saveMethod: document.getElementById("saveMethod").value,
+    gatewayUrl: document.getElementById("gatewayUrl").value.trim().replace(/\/+$/, "")
   };
 
   chrome.storage.local.set(settings, () => {

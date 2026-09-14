@@ -19,7 +19,8 @@ This repo contains three parts:
 |---|---|
 | `extension/` | Manifest V3 Chromium extension (no build step) |
 | `worker/` | Cloudflare Worker — the shared keyless "Daemon" classifier (Gemini) |
-| `service/` | Classifier service: Qwen3-VL-4B + OCR, Docker, platform-agnostic (see below) |
+| `service/` | **Self-hosted classifier service** — Qwen3-VL-4B + OCR, Docker, platform-agnostic (see below) |
+| `server/` | **Shared gateway** — Redis phash cache + per-provider rate limiting + SQLite metrics in front of ALL providers (see below) |
 
 ---
 
@@ -172,26 +173,25 @@ platforms" below: there's currently no free tier that can even boot this
 container, so a slow boot on a host we can't launch on is moot. Do not "fix"
 the model/quantization to shave latency without discussing it first.
 
-### Rate limiting (self-hosted only)
+### Rate limiting
 
 `service/` has **no authentication** — anyone with the URL can call
 `/classify`, and the single shared VLM already serializes every request
 behind one lock at 20–30 s each. A per-IP sliding-window rate limiter
-(`service/ratelimit.py`) is **enabled by default**: `RATE_LIMIT_PER_MINUTE`
-(default 10), returns `429` + `Retry-After` + the same JSON error contract
-(CORS still present). In-memory, process-local — fine for one instance; see
-`service/README.md` for the full behavior and config knobs. The Cloudflare
-Worker (`worker/`) already has its own server-side limit (5/min, enforced by
-a Durable Object) — this is the equivalent protection for the self-hosted
-path.
+(`service/ratelimit.py`) is **enabled by default** for standalone
+deployments. When `service/` runs behind the shared gateway (`server/`,
+see below), the gateway's Redis-backed per-provider limiter takes over the
+business rule and nginx adds a coarse IP-based edge layer in front. The
+Cloudflare Worker (`worker/`) keeps its own server-side limit (5/min,
+Durable Object) so it stays safe for direct callers too.
 
-### Caching — deliberately not implemented (PoC, not production)
+### Caching
 
-Content-hash → result caching (skip re-classifying an image already seen)
-would cut real cost meaningfully in production, but this is a pet project /
-proof of concept, not a production deployment — there's no traffic pattern
-to justify the complexity yet. **Next goal**, not done now. Tracked as
-future work, not a gap in the current scope.
+Perceptual-hash caching now lives in the shared gateway (`server/`) — every
+provider's results populate ONE shared Redis pHash cache, so a meme already
+classified by anyone, through any provider, is served instantly to everyone
+else. See "Shared gateway" below. (`service/` standalone has no cache —
+it's the model-runner; caching is the gateway's job.)
 
 ### Deployment platforms (portability proof)
 
@@ -253,6 +253,68 @@ limits). Nothing host-specific is hardcoded anywhere.
 
 ---
 
+## Shared gateway (`server/`)
+
+By default the extension routes **every provider** — Daemon (worker),
+Daemon2 (service/) and all BYO-key providers — through the project's own
+gateway (`OWNER_GATEWAY_URL` in `extension/background.js`; users can point
+the extension at their own instance via Settings → Gateway URL). One
+gateway means one shared dataset:
+
+- **Shared pHash cache (Redis).** Every classification result, from any
+  provider, is cached by perceptual hash (Hamming threshold 8, named
+  constant). A meme one user classified through Gemini is served instantly
+  from cache to another user requesting it through Claude — cache keys are
+  provider-agnostic on purpose. A cache hit skips the model call entirely
+  (actively gates, not log-only).
+- **Shared rate limiting (Redis).** Keyless providers (`daemon2`, `worker`)
+  are capped server-side (5/min per client, client can't raise it; nginx
+  `limit_req` sits in front as the coarse flood guard). BYO-key providers
+  are exempt from the gateway's limiter — your key, your cost — but still
+  share cache + metrics.
+- **Shared metrics log (SQLite).** Every request logs provider, mode,
+  per-stage latency, cache hit + Hamming distance, errors, and correction
+  events (`was_correction`, `previous_wrong_slug`,
+  `correction_was_cache_hit`). `manual_override_is_meme` is a nullable
+  column for hand-labeling samples later. `python analyze_metrics.py --db
+  /data/metrics.sqlite3` reports cache hit rate, Hamming distribution of
+  actual hits, OCR→VLM fallback rate, p50/p95/p99 latency per stage,
+  false-negative rate over labeled rows, and correction rate split by
+  scenario (high cache-hit corrections → threshold too loose; high
+  fresh-call corrections → prompt/model needs work).
+
+Deploy: `cd server && docker compose up --build` (app + Redis + nginx; see
+`server/README.md` for Redis deployment options, config, and the API
+reference). Then set `OWNER_GATEWAY_URL` in `extension/background.js` to
+the deployed URL.
+
+### "Rename last" correction flow
+
+The popup's **Rename last** button re-runs classification on the last image
+with the rejected slug injected as an explicit negative example ("produce a
+different, more accurate description — do not repeat the previous answer"),
+then re-downloads the image under the corrected name.
+
+> **Limitation (by design):** Chrome extensions cannot rename files on
+> disk after download. This downloads a **corrected copy** — you may want
+> to delete the old file. The popup says so next to the button.
+
+Two server-side scenarios:
+
+- **Last result was a cache hit** → force a fresh model pass, then
+  **overwrite the cache entry** for that pHash, so everyone who would have
+  hit that entry gets the corrected answer instead of repeating the
+  mistake.
+- **Last result was a fresh model call** → fresh pass with the negative
+  example; cache untouched (it was never cached in the first place).
+
+Both log as corrections with the previous wrong slug and which scenario
+applied — correction frequency is itself a tracked metric. The flow is
+chainable: after a correction, the popup state updates to the new result,
+so clicking again corrects the latest attempt.
+
+---
+
 ## Development
 
 ```bash
@@ -260,6 +322,8 @@ cd worker && npm run dev && npm test        # Cloudflare worker
 cd service && python _test_light.py         # model-free contract checks
 cd service && PORT=7861 python app.py       # full service (needs models)
 cd service && python _test_api.py           # end-to-end API tests
+cd server && for t in _test_*.py; do python $t; done   # gateway (fakeredis, no models)
+cd server && docker compose up --build      # full gateway stack
 ```
 
 The extension has no build step — reload it from `chrome://extensions`.
@@ -280,13 +344,14 @@ The extension has no build step — reload it from `chrome://extensions`.
 именем (`distracted-boyfriend.jpg`) на языке и в письменности самого мема —
 или с аккуратной датой, если это не мем.
 
-В репозитории три части:
+В репозитории четыре части:
 
 | папка | что это |
 |---|---|
 | `extension/` | Chromium-расширение Manifest V3 (без шага сборки) |
 | `worker/` | Cloudflare Worker — общий сервер «Daemon» без ключа (Gemini) |
 | `service/` | Сервис классификации: Qwen3-VL-4B + OCR, Docker, платформенно-независимый (см. ниже) |
+| `server/` | **Общий шлюз** — pHash-кэш в Redis + rate limiting по провайдерам + метрики в SQLite перед ВСЕМИ провайдерами (см. ниже) |
 
 ---
 
@@ -443,25 +508,25 @@ RSS), любой x86_64-хост с Docker, доступ к huggingface.co. То
 всё равно не можем запуститься, не имеет значения. Не «чините» задержку
 сменой модели/квантизации без обсуждения.
 
-### Rate limiting (только для self-hosted)
+### Rate limiting
 
 У `service/` **нет аутентификации** — вызвать `/classify` может кто угодно
 с URL, а единственный общий VLM уже сериализует каждый запрос за одной
-блокировкой по 20–30 с. По умолчанию **включён** rate limiter по IP со
-скользящим окном (`service/ratelimit.py`): `RATE_LIMIT_PER_MINUTE`
-(по умолчанию 10), при превышении — `429` + `Retry-After` + тот же
-JSON-контракт ошибки (CORS сохраняется). В памяти процесса — годится для
-одного инстанса; подробности и настройки в `service/README.md`. У
-Cloudflare Worker (`worker/`) уже есть свой серверный лимит (5/мин через
-Durable Object) — это эквивалентная защита для self-hosted пути.
+блокировкой по 20–30 с. Для standalone-деплоя по умолчанию **включён** rate
+limiter по IP со скользящим окном (`service/ratelimit.py`). Когда `service/`
+работает за общим шлюзом (`server/`, см. ниже), бизнес-правило переходит к
+Redis-лимитеру шлюза по провайдерам, а nginx добавляет грубый IP-слой
+защиты от флуда впереди. Cloudflare Worker (`worker/`) сохраняет свой
+серверный лимит (5/мин через Durable Object), чтобы оставаться безопасным и
+для прямых вызовов.
 
-### Кэширование — сознательно не реализовано (PoC, не продакшн)
+### Кэширование
 
-Кэш по хешу содержимого (не переклассифицировать уже виденную картинку)
-дал бы реальную экономию в продакшне, но это pet-проект / proof of concept,
-а не продакшн-деплой — пока нет паттерна нагрузки, оправдывающего эту
-сложность. **Следующая цель**, не сделано сейчас. Это будущая работа, а не
-пробел в текущей области охвата.
+Перцептивное кэширование (pHash) теперь живёт в общем шлюзе (`server/`) —
+результаты всех провайдеров пополняют ОДИН общий Redis-кэш, так что мем,
+уже классифицированный кем угодно через любого провайдера, мгновенно
+отдаётся всем остальным. См. «Общий шлюз» ниже. (У standalone `service/`
+кэша нет — это исполнитель моделей; кэширование — задача шлюза.)
 
 ### Платформы деплоя (доказательство портативности)
 
@@ -523,6 +588,71 @@ OOM (нужно ≥4 ГБ); у **Fly.io** бесплатного тарифа б
 
 ---
 
+## Общий шлюз (`server/`)
+
+По умолчанию расширение направляет **всех провайдеров** — Daemon (worker),
+Daemon2 (service/) и всех провайдеров со своим ключом — через собственный
+шлюз проекта (`OWNER_GATEWAY_URL` в `extension/background.js`; пользователь
+может указать свой инстанс в Настройках → Gateway URL). Один шлюз = одна
+общая база данных:
+
+- **Общий pHash-кэш (Redis).** Каждый результат классификации от любого
+  провайдера кэшируется по перцептивному хешу (порог Хэмминга 8,
+  именованная константа). Мем, классифицированный одним пользователем через
+  Gemini, мгновенно отдаётся из кэша другому, запросившему его через Claude
+  — ключи кэша намеренно не зависят от провайдера. Попадание в кэш
+  полностью пропускает вызов модели (активно гейтит запросы, а не просто
+  логирует).
+- **Общий rate limiting (Redis).** Бесключевые провайдеры (`daemon2`,
+  `worker`) ограничены на сервере (5/мин на клиента, клиент не может
+  повысить; nginx `limit_req` впереди как грубая защита от флуда).
+  Провайдеры со своим ключом освобождены от лимитера шлюза — ваш ключ,
+  ваши расходы — но кэш и метрики остаются общими.
+- **Общий лог метрик (SQLite).** Каждый запрос пишет провайдера, режим,
+  задержки по этапам, попадание в кэш + расстояние Хэмминга, ошибки и
+  события коррекции (`was_correction`, `previous_wrong_slug`,
+  `correction_was_cache_hit`). `manual_override_is_meme` — nullable-колонка
+  для ручной разметки выборки позже. `python analyze_metrics.py --db
+  /data/metrics.sqlite3` выдаёт долю попаданий в кэш, распределение
+  Хэмминга по фактическим попаданиям, долю OCR→VLM-фолбэков, p50/p95/p99
+  задержки по этапам, долю ложноотрицательных по размеченным строкам и
+  долю коррекций с разбивкой по сценариям (много коррекций попаданий кэша →
+  порог слишком свободный; много коррекций свежих вызовов → проблема в
+  промпте/модели).
+
+Деплой: `cd server && docker compose up --build` (приложение + Redis +
+nginx; варианты деплоя Redis, конфиг и справочник API — в
+`server/README.md`). Затем впишите задеплоенный URL в `OWNER_GATEWAY_URL` в
+`extension/background.js`.
+
+### Корректировка «Rename last»
+
+Кнопка **Rename last** в попапе заново прогоняет классификацию последней
+картинки, внедряя отвергнутый slug в промпт как явный негативный пример
+(«выдай другое, более точное описание — не повторяй предыдущий ответ»), и
+пере-скачивает изображение под исправленным именем.
+
+> **Ограничение (по замыслу):** Chrome-расширения не умеют переименовывать
+> файлы на диске после скачивания. Это скачивает **исправленную копию** —
+> старый файл, возможно, стоит удалить. Попап говорит об этом рядом с
+> кнопкой.
+
+Два серверных сценария:
+
+- **Прошлый результат был попаданием в кэш** → принудительный свежий
+  проход модели, затем **перезапись записи кэша** для этого pHash, чтобы
+  все, кто попал бы на эту запись, получили исправленный ответ, а не
+  повтор ошибки.
+- **Прошлый результат был свежим вызовом модели** → свежий проход с
+  негативным примером; кэш не трогается (он и не был закэширован).
+
+Оба сценария логируются как коррекции с прежним неверным slug и признаком
+сценария — частота коррекций сама является метрикой. Поток цепочечный: после
+коррекции состояние попапа обновляется новым результатом, так что повторный
+клик исправляет уже последнюю попытку.
+
+---
+
 ## Разработка
 
 ```bash
@@ -530,6 +660,8 @@ cd worker && npm run dev && npm test        # Cloudflare worker
 cd service && python _test_light.py         # проверки контракта без моделей
 cd service && PORT=7861 python app.py       # полный сервис (нужны модели)
 cd service && python _test_api.py           # сквозные тесты API
+cd server && for t in _test_*.py; do python $t; done   # шлюз (fakeredis, без моделей)
+cd server && docker compose up --build      # полный стек шлюза
 ```
 
 У расширения нет шага сборки — просто перезагрузите его на

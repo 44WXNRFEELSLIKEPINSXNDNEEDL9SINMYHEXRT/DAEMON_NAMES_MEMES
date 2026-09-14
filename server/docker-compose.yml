@@ -1,0 +1,60 @@
+# Local/self-hosted stack: gateway (server/) + Redis + Nginx edge.
+# Build context is the repo root because server/Dockerfile needs both
+# server/ and service/ — run `docker compose -f server/docker-compose.yml
+# up` from anywhere, or `cd server && docker compose up` (compose resolves
+# `context: ..` relative to this file, not the cwd).
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # No password by default — this stack is meant to run entirely inside
+    # the compose network (redis is not port-published to the host). If you
+    # deploy redis externally instead (see README "Redis deployment"), set a
+    # password and point REDIS_URL at it.
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      METRICS_DB_PATH: /data/metrics.sqlite3
+      PORT: "8090"
+      # Everything else falls back to the defaults documented in
+      # server/.env.example / service/.env.example. Override here or with
+      # an env_file: directive as needed.
+    env_file:
+      - .env
+    volumes:
+      - metrics-data:/data
+      - models-data:/app/service/models   # pre-seed to skip the 3GB re-download
+    # Not published directly — nginx is the only public entrypoint.
+    expose:
+      - "8090"
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  redis-data:
+  metrics-data:
+  models-data:

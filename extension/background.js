@@ -16,10 +16,24 @@ const DEFAULTS = {
   namingPrefix: "",
   dateFormat: "system",
   downloadMode: "context",
-  saveMethod: "direct"
+  saveMethod: "direct",
+  // Base URL of a server/ gateway. Empty = use the project's shared gateway
+  // (OWNER_GATEWAY_URL in background.js); set it to override with your own.
+  // daemon2 falls back to http://localhost:8090 when both are empty (dev).
+  gatewayUrl: ""
 };
 
 const WORKER_URL = "https://daemon-meme.windown52358.workers.dev";
+
+// The project's own server/ gateway deployment. ALL provider traffic routes
+// through it by default, so every user shares one Redis phash cache and one
+// SQLite metrics DB (that shared dataset is the point — see root README
+// "Shared gateway"). Users can point the extension at their own gateway via
+// Settings → Gateway URL; that override wins over this default.
+// OWNER: fill this in once server/ is deployed somewhere (any Docker host —
+// see server/README.md). While it's empty, the extension falls back to the
+// legacy direct-call paths so nothing breaks before deployment.
+const OWNER_GATEWAY_URL = "";
 
 // Enforced server-side by the worker itself, so it can't be raised from the extension.
 const WORKER_RATE_LIMIT = 5;
@@ -148,17 +162,103 @@ async function classifyWithWorker(base64, mimeType, locale) {
   return await resp.json();
 }
 
+// Daemon2 (server/) is reached exclusively through classifyViaGateway() —
+// mode "manual" for the explicit "save as meme" click (isMeme assumed true
+// server-side), "auto" for the all-downloads flow. The gateway URL comes
+// from settings (options page); defaults to localhost for development.
+// Responses carry _phash/_cacheHit metadata for the "Rename last" flow.
+
+// --- Shared gateway routing (all providers) ---------------------------------
+// When a Gateway URL is configured (options page), EVERY provider's traffic
+// goes through server/: shared Redis phash cache + shared SQLite metrics log
+// for all of them, Redis rate limiting for the keyless ones (worker/daemon2).
+// BYO-key providers still use the user's own key — the gateway just proxies
+// the call, so cost stays the user's. With no gateway URL set, the legacy
+// direct-call paths below are used unchanged (zero-config default).
+const DAEMON2_DEFAULT_URL = "http://localhost:8090";
+
+// Gateway URL resolution priority:
+//   1. user-set Gateway URL (options page) — explicit override wins
+//   2. OWNER_GATEWAY_URL — the project's own shared gateway (default once deployed)
+//   3. null — no gateway: legacy direct calls; daemon2 alone still works
+//      against localhost for development (DAEMON2_DEFAULT_URL).
+function resolveGatewayUrl(settings) {
+  const url = (settings.gatewayUrl || OWNER_GATEWAY_URL || "").trim();
+  return url ? url.replace(/\/+$/, "") : null;
+}
+
+async function classifyViaGateway(gatewayUrl, provider, base64, mimeType, locale, settings, mode) {
+  const body = { image: base64, mimeType, locale, mode, provider };
+  const apiKey = settings.apiKeys?.[provider];
+  if (apiKey) body.apiKey = apiKey;
+
+  const resp = await fetch(`${gatewayUrl}/classify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const cacheHit = resp.headers.get("x-cache") === "HIT";
+  const phash = resp.headers.get("x-phash");
+  if (resp.status === 429) {
+    const rb = await resp.json().catch(() => ({}));
+    throw new Error(`Gateway rate limited, retry in ${rb.retry_after_seconds ?? "?"}s`);
+  }
+  if (!resp.ok) throw new Error(`Gateway error: ${resp.status}`);
+  const memeInfo = await resp.json();
+  return { ...memeInfo, _cacheHit: cacheHit, _phash: phash };
+}
+
+// "Rename last" correction request against the gateway. Forces a fresh
+// classification pass; the gateway decides how to handle the cache
+// depending on whether the flagged result was itself a cache hit.
+// Works for every provider the gateway knows (daemon2, worker, BYO-key).
+async function correctViaGateway(gatewayUrl, { base64, mimeType, locale, mode, provider, apiKey, phash, cacheHit, previousSlug }) {
+  const body = {
+    image: base64, mimeType, locale, mode, provider,
+    phash: phash || "", cache_hit: Boolean(cacheHit), previous_slug: previousSlug
+  };
+  if (apiKey) body.apiKey = apiKey;
+
+  const resp = await fetch(`${gatewayUrl}/correct`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (resp.status === 429) {
+    const rb = await resp.json().catch(() => ({}));
+    throw new Error(`Gateway rate limited, retry in ${rb.retry_after_seconds ?? "?"}s`);
+  }
+  if (!resp.ok) throw new Error(`Gateway correction error: ${resp.status}`);
+  return await resp.json();
+}
+
 // Which engine actually runs: the selected one if usable, otherwise the Daemon worker.
 function resolveProvider(settings) {
   const provider = settings.apiProvider;
   if (provider === "worker") return "worker";
+  // daemon2 has no BYO key concept and is never auto-selected as a fallback —
+  // it's only used if the user has explicitly chosen it (and it's reachable;
+  // see options.js, it's rendered as unavailable/unselectable by default).
+  if (provider === "daemon2") return "daemon2";
   if (settings.apiKeys?.[provider]) return provider;
   return "worker";
 }
 
-async function classifyWith(provider, base64, mimeType, locale, settings) {
+async function classifyWith(provider, base64, mimeType, locale, settings, mode = "auto") {
   const apiKey = settings.apiKeys?.[provider];
 
+  // Gateway routing: by default ALL providers go through the project's own
+  // shared gateway (OWNER_GATEWAY_URL), so every user shares one Redis phash
+  // cache + one SQLite metrics DB. A user-set Gateway URL overrides it.
+  // daemon2 always uses a gateway (it IS the gateway's pipeline); if neither
+  // URL is set it falls back to localhost for development.
+  const gatewayUrl = resolveGatewayUrl(settings)
+    || (provider === "daemon2" ? DAEMON2_DEFAULT_URL : null);
+  if (gatewayUrl) {
+    return classifyViaGateway(gatewayUrl, provider, base64, mimeType, locale, settings, mode);
+  }
+
+  // Legacy direct-call paths (no gateway anywhere — pre-deployment fallback).
   if (provider === "worker") return classifyWithWorker(base64, mimeType, locale);
   if (provider === "google") return classifyWithGoogle(base64, mimeType, locale, apiKey);
   if (provider === "claude") return classifyWithClaude(base64, mimeType, locale, apiKey);
@@ -205,7 +305,7 @@ function dateStamp(format) {
   return sanitizeFilename(formatDate(new Date(), format));
 }
 
-async function recordStats(memeInfo, imageBlob, provider) {
+async function recordStats(memeInfo, imageBlob, provider, sourceUrl, mode) {
   const { stats, rateLimitUsage } = await chrome.storage.local.get(["stats", "rateLimitUsage"]);
 
   const newStats = {
@@ -225,11 +325,23 @@ async function recordStats(memeInfo, imageBlob, provider) {
         ? { windowStart: usage.windowStart, count: usage.count + 1 }
         : { windowStart: now, count: 1 }
     },
+    // "Rename last" (popup) needs enough state to re-run classification on
+    // the SAME original image and correctly tell the gateway whether the
+    // flagged result came from its cache. Extension has no filesystem
+    // rename capability — a correction re-downloads a fresh copy under the
+    // new name, it never touches the previously saved file (see popup.html
+    // note + README "Rename last correction flow").
     lastPreview: {
       imageDataUrl: `data:${imageBlob.type};base64,${await blobToBase64(imageBlob)}`,
       filenameSlug: memeInfo.filenameSlug,
       isMeme: memeInfo.isMeme,
-      timestamp: now
+      timestamp: now,
+      provider,
+      mode: mode || "auto",
+      sourceUrl: sourceUrl || null,
+      mimeType: imageBlob.type,
+      phash: memeInfo._phash || null,
+      cacheHit: Boolean(memeInfo._cacheHit)
     }
   });
 }
@@ -366,14 +478,16 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     const base64 = await blobToBase64(blob);
     const locale = chrome.i18n.getUILanguage();
-    const memeInfo = await classifyWith(provider, base64, blob.type, locale, settings);
+    // Explicit "save as meme" click = manual mode (daemon2 assumes isMeme
+    // server-side; other providers ignore the mode field).
+    const memeInfo = await classifyWith(provider, base64, blob.type, locale, settings, "manual");
 
     const filename = memeInfo.isMeme
       ? `${prefix}${sanitizeFilename(memeInfo.filenameSlug)}.${ext}`
       : fallbackFilename;
 
     await startDownload({ url: info.srcUrl, filename, saveAs });
-    await recordStats(memeInfo, blob, provider);
+    await recordStats(memeInfo, blob, provider, info.srcUrl, "manual");
   } catch (err) {
     console.error("Meme classify failed:", err);
     chrome.downloads.download({ url: info.srcUrl });
@@ -432,16 +546,101 @@ chrome.downloads.onCreated.addListener(async (item) => {
     const blob = await imgResp.blob();
     const base64 = await blobToBase64(blob);
     const locale = chrome.i18n.getUILanguage();
-    const memeInfo = await classifyWith(provider, base64, blob.type || item.mime, locale, settings);
+    // Unattended downloads-API callback = auto mode (the model decides isMeme).
+    const memeInfo = await classifyWith(provider, base64, blob.type || item.mime, locale, settings, "auto");
 
     const filename = memeInfo.isMeme
       ? `${prefix}${sanitizeFilename(memeInfo.filenameSlug)}.${ext}`
       : fallbackFilename;
 
     await startDownload({ url: item.url, filename, saveAs });
-    await recordStats(memeInfo, blob, provider);
+    await recordStats(memeInfo, blob, provider, item.url, "auto");
   } catch (err) {
     console.error("Auto-rename failed:", err);
     await startDownload({ url: item.url, filename: fallbackFilename, saveAs });
   }
+});
+
+// ---------------------------------------------------------------------------
+// "Rename last" — correction flow, triggered from the popup.
+//
+// IMPORTANT LIMITATION: Chrome extensions cannot rename files on disk after
+// download. What this does is trigger a FRESH classification (with the
+// rejected slug injected as a negative example, and/or the shared cache
+// entry corrected server-side) and re-download the SAME image under the new
+// name. The previously downloaded file stays on disk — the popup tells the
+// user they may want to delete it.
+//
+// The flow is chainable: after a correction, lastPreview is updated with the
+// new result, so a second click corrects the latest attempt, not the original.
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type !== "rename-last") return false;
+
+  (async () => {
+    try {
+      const settings = await chrome.storage.local.get(DEFAULTS);
+      const last = settings.lastPreview;
+      if (!last?.sourceUrl || !last.imageDataUrl) {
+        sendResponse({ ok: false, error: "no_last_classification" });
+        return;
+      }
+
+      // Corrections REQUIRE a gateway — the correction semantics (cache
+      // overwrite vs negative-example re-roll) live in server/. Falls back
+      // to the localhost dev gateway if none is configured; if that's not
+      // running either, correctViaGateway throws and the error surfaces in
+      // the popup status line.
+      const gatewayUrl = resolveGatewayUrl(settings) || DAEMON2_DEFAULT_URL;
+      const base64 = last.imageDataUrl.split(",")[1];
+      const locale = chrome.i18n.getUILanguage();
+
+      // Corrections always go through the gateway — it owns the cache entry
+      // and the correction semantics (scenario A vs B). Works for any
+      // provider the gateway knows; BYO keys are forwarded so cost stays
+      // on the user's own account.
+      const corrected = await correctViaGateway(gatewayUrl, {
+        base64,
+        mimeType: last.mimeType || "image/png",
+        locale,
+        mode: last.mode || "manual",
+        provider: last.provider || "daemon2",
+        apiKey: settings.apiKeys?.[last.provider] || null,
+        phash: last.phash || "",
+        cacheHit: Boolean(last.cacheHit),
+        previousSlug: last.filenameSlug || ""
+      });
+
+      if (!corrected || corrected.error || !corrected.filenameSlug) {
+        sendResponse({ ok: false, error: corrected?.error || "correction_failed" });
+        return;
+      }
+
+      // Re-download the same source image under the corrected name.
+      const prefix = settings.namingPrefix ? `${settings.namingPrefix}_` : "";
+      const ext = (last.mimeType || "image/png").split("/")[1] || "jpg";
+      const filename = `${prefix}${sanitizeFilename(corrected.filenameSlug)}.${ext}`;
+      const saveAs = settings.saveMethod === "saveAs";
+      await startDownload({ url: last.sourceUrl, filename, saveAs });
+
+      // Update lastPreview to the corrected result so repeated clicks chain
+      // onto the newest attempt. cacheHit=false: this fresh pass is not
+      // served from cache, so a further correction is scenario B.
+      await chrome.storage.local.set({
+        lastPreview: {
+          ...last,
+          filenameSlug: corrected.filenameSlug,
+          isMeme: corrected.isMeme,
+          timestamp: Date.now(),
+          cacheHit: false
+        }
+      });
+
+      sendResponse({ ok: true, filenameSlug: corrected.filenameSlug, isMeme: corrected.isMeme });
+    } catch (err) {
+      console.error("Rename last failed:", err);
+      sendResponse({ ok: false, error: String(err?.message || err) });
+    }
+  })();
+
+  return true; // keep the message channel open for the async sendResponse
 });
