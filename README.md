@@ -1,6 +1,5 @@
 <a id="english"></a>
-
-# Daemon Names Memes
+![Logo"|653](pictures/logo.png)
 
 **[English](#english) | [Русский](#russian)**
 
@@ -8,29 +7,50 @@
 
 <a id="english"></a>
 
-A browser extension that renames images as you save them: right-click any
-image → "Save image as meme" → a vision model classifies it and the file is
-saved with a meaningful name (`distracted-boyfriend.jpg`) in the meme's own
-language and script — or with a clean date if it's not a meme.
-
-This repo contains three parts:
-
-| folder | what it is |
-|---|---|
-| `extension/` | Manifest V3 Chromium extension (no build step) |
-| `worker/` | Cloudflare Worker — the shared keyless "Daemon" classifier (Gemini) |
-| `service/` | **Self-hosted classifier service** — Qwen3-VL-4B + OCR, Docker, platform-agnostic (see below) |
-| `server/` | **Shared gateway** — Redis phash cache + per-provider rate limiting + SQLite metrics in front of ALL providers (see below) |
-
----
+A browser extension that renames images as you save them: 
+1. right-click any image
+2. "Save image as meme"
+3. a vision model classifies it and the file is saved with a meaningful name (`absolute-breakcore-meme.jpeg`)
+Naming is in the meme's own language and script or with a clean date if it's not a meme.
 
 ## Extension
+
+**Right-click a meme, rename it.** The extension adds "Save image as meme"
+to the browser's native context menu — no separate UI to open, no extra
+click beyond the one you'd make anyway to save the image.
+
+![Context menu with "Save image as meme"](pictures/context-menu.png)
+
+**The file lands with a real name.** Instead of `image (4).jpeg`, the save
+dialog offers a slug the vision model generated from what's actually in the
+picture — here `absolute-breakcore-meme.jpeg`.
+
+![Save dialog showing the auto-generated filename](pictures/save-dialog.png)
+
+**The popup tracks what just happened.** Active provider and key, this
+session's rate-limit usage, a thumbnail of the last classification with a
+one-click "Rename last" if the model got it wrong, and a running count of
+memes named.
+
+![Extension popup with active key, rate limit, last classification and rename button](pictures/popup.png)
+
+**Settings covers the rest.** Pick a classification provider (or bring your
+own API key), set a filename prefix and date format, choose when renaming
+triggers and where files save, and optionally point the extension at your
+own gateway instance.
+
+![Settings page with provider selection and naming/trigger/destination options](pictures/settings.png)
+
+---
 
 ### What it can do
 
 - Works with plenty of AI providers. Use your own key for Google, Anthropic,
   OpenAI, OpenRouter, Groq, Mistral, or xAI. Or just use the shared Daemon
   server and skip the key entirely.
+
+> To get a free Gemini API key without linking a card, go to Google AI Studio, log in with your Google account, and click the "Get API key" button. Google may change the terms.
+
 - Smart limits. Your own keys have no limit by default. The shared Daemon
   server is capped at 5 calls a minute, enforced server side.
 - Optional prefix for every renamed file; pick your date format for
@@ -44,23 +64,23 @@ This repo contains three parts:
 
 ### Provider lineup
 
-| Provider | Needs a key | Default limit | Good to know |
-|---|---|---|---|
-| DAEMON | No | 5 per minute (server side) | The default. Shared server, Gemini. |
-| DAEMON2 | No | — | **Unavailable.** Self-hosted `service/` (Qwen3-VL-4B + OCR) — see below. Shown as a disabled card in Settings; can't be selected until it's actually hosted somewhere. |
-| Google | Yes | No limit | Gemini vision |
-| Anthropic | Yes | No limit | Claude vision |
-| OpenAI | Yes | No limit | GPT vision |
-| OpenRouter | Yes | No limit | One key for lots of models |
-| Groq | Yes | No limit | Llama vision, very fast |
-| Mistral | Yes | No limit | Pixtral vision |
-| xAI | Yes | No limit | Grok vision |
+| Provider   | Keyless | Default limit              | Good to know                                                                                                                                             |
+| ---------- | ------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DAEMON     | Yes     | 5 per minute (server side) | The default. Shared server, Gemini.                                                                                                                      |
+| DAEMON2    | Yes     | —                          | *(Unavailable)*`service/` (Qwen3-VL-4B + OCR) — see below. Shown as a disabled card in Settings; can't be selected until it's actually hosted somewhere. |
+| Google     | No      | No limit                   | Gemini vision                                                                                                                                            |
+| Anthropic  | No      | No limit                   | Claude vision                                                                                                                                            |
+| OpenAI     | No      | No limit                   | GPT vision                                                                                                                                               |
+| OpenRouter | No      | No limit                   | One key for lots of models                                                                                                                               |
+| Groq       | No      | No limit                   | Llama vision, very fast                                                                                                                                  |
+| Mistral    | No      | No limit                   | Pixtral vision                                                                                                                                           |
+| xAI        | No      | No limit                   | Grok vision                                                                                                                                              |
 
 Your keys stay in your browser and only go to the provider you picked.
 
 ---
 
-## Cloudflare Worker (the "Daemon" server)
+## Cloudflare Worker (`worker/`)
 
 Only needed if you want the keyless Daemon provider:
 
@@ -78,12 +98,13 @@ development.
 
 ---
 
-## Self-hosted classifier service (`service/`)
+## Classifier service (`service/`)
 
-A portable, self-hosted alternative to the shared Daemon worker: a plain
-HTTP JSON API in a standard Docker container that runs identically on any
-Docker-capable host. No platform-specific code — all host configuration is
-env vars (single config layer, `service/.env.example`).
+A portable alternative to the shared Daemon worker: a plain HTTP JSON API in
+a standard Docker container that runs identically on any Docker-capable
+host. No platform-specific code — all host configuration is env vars
+(single config layer, `service/.env.example`). It isn't a hosted product —
+this is alpha software, so running it means running it yourself somewhere.
 
 ### Architecture: two-stage pipeline
 
@@ -175,24 +196,15 @@ the model/quantization to shave latency without discussing it first.
 
 ### Rate limiting
 
-`service/` has **no authentication** — anyone with the URL can call
+`service/` has no authentication, so anyone with the URL can call
 `/classify`, and the single shared VLM already serializes every request
 behind one lock at 20–30 s each. A per-IP sliding-window rate limiter
-(`service/ratelimit.py`) is **enabled by default** for standalone
+(`service/ratelimit.py`) is enabled by default for standalone
 deployments. When `service/` runs behind the shared gateway (`server/`,
 see below), the gateway's Redis-backed per-provider limiter takes over the
 business rule and nginx adds a coarse IP-based edge layer in front. The
 Cloudflare Worker (`worker/`) keeps its own server-side limit (5/min,
 Durable Object) so it stays safe for direct callers too.
-
-### Caching
-
-Perceptual-hash caching now lives in the shared gateway (`server/`) — every
-provider's results populate ONE shared Redis pHash cache, so a meme already
-classified by anyone, through any provider, is served instantly to everyone
-else. See "Shared gateway" below. (`service/` standalone has no cache —
-it's the model-runner; caching is the gateway's job.)
-
 ### Deployment platforms (portability proof)
 
 The image is host-agnostic; only the deploy commands differ.
@@ -255,23 +267,25 @@ limits). Nothing host-specific is hardcoded anywhere.
 
 ## Shared gateway (`server/`)
 
-By default the extension routes **every provider** — Daemon (worker),
-Daemon2 (service/) and all BYO-key providers — through the project's own
+By default the extension routes every provider — Daemon (`worker/)`,
+Daemon2 (`service/`) and all BYO-key providers — through the project's own
 gateway (`OWNER_GATEWAY_URL` in `extension/background.js`; users can point
 the extension at their own instance via Settings → Gateway URL). One
-gateway means one shared dataset:
+gateway means one shared dataset, and it's deliberately lite: **caching +
+metrics only**, no model of its own and no rate limiting of its own.
 
 - **Shared pHash cache (Redis).** Every classification result, from any
   provider, is cached by perceptual hash (Hamming threshold 8, named
   constant). A meme one user classified through Gemini is served instantly
   from cache to another user requesting it through Claude — cache keys are
   provider-agnostic on purpose. A cache hit skips the model call entirely
-  (actively gates, not log-only).
-- **Shared rate limiting (Redis).** Keyless providers (`daemon2`, `worker`)
-  are capped server-side (5/min per client, client can't raise it; nginx
-  `limit_req` sits in front as the coarse flood guard). BYO-key providers
-  are exempt from the gateway's limiter — your key, your cost — but still
-  share cache + metrics.
+  (actively gates, not log-only). Cache lookups use a multi-index Hamming
+  search instead of loading the whole cache per request; `CACHE_TTL_S`
+  works per entry.
+- **No gateway rate limiter.** Limits stay where they already live: nginx
+  `limit_req` at the edge, `service/`'s own per-IP limiter, the worker's
+  Durable Object, and your own quota for BYO keys. Upstream `429`s reach the
+  extension as `429` with `retry_after_seconds`.
 - **Shared metrics log (SQLite).** Every request logs provider, mode,
   per-stage latency, cache hit + Hamming distance, errors, and correction
   events (`was_correction`, `previous_wrong_slug`,
@@ -282,30 +296,13 @@ gateway means one shared dataset:
   false-negative rate over labeled rows, and correction rate split by
   scenario (high cache-hit corrections → threshold too loose; high
   fresh-call corrections → prompt/model needs work).
-
-Deploy: `cd server && docker compose up --build` (app + Redis + nginx; see
-`server/README.md` for Redis deployment options, config, and the API
-reference). Then set `OWNER_GATEWAY_URL` in `extension/background.js` to
-the deployed URL.
-
-### Lite gateway (current behavior)
-
-The gateway is now deliberately lite: **caching + metrics only**. Where this
-differs from the description above, this section wins.
-
-- **No gateway rate limiter.** Limits stay where they already live: nginx
-  `limit_req` at the edge, `service/`'s own per-IP limiter, the worker's
-  Durable Object, and your own quota for BYO keys. Upstream `429`s reach the
-  extension as `429` with `retry_after_seconds`.
 - **Not bound to daemon2.** The gateway never runs a model and doesn't
   bundle `service/`: every provider is an async HTTP call. daemon2 is
   opt-in via `SERVICE_URL` (answers `503` without it; cache hits are still
   served). The default provider is `worker`.
 - **Scales out.** Async Redis + pooled HTTP client, image hashing off the
   event loop, batched background SQLite writer, several uvicorn workers
-  (`WEB_CONCURRENCY`). Cache lookups use a multi-index Hamming search
-  instead of loading the whole cache per request; `CACHE_TTL_S` works per
-  entry.
+  (`WEB_CONCURRENCY`).
 - **Hosts next to other apps.** Unique compose project name; nginx is
   published on `127.0.0.1:8090` (not `0.0.0.0:80`), Redis and the app are
   never published; nginx only serves `/classify`, `/correct`, `/health`
@@ -317,8 +314,9 @@ cd server && docker compose up -d --build                     # gateway + Redis 
 SERVICE_URL=http://service:8080 docker compose --profile daemon2 up -d --build   # + daemon2
 ```
 
-All settings (all optional): `server/.env.example`. Details:
-`server/README.md` → "Lite gateway".
+Then set `OWNER_GATEWAY_URL` in `extension/background.js` to the deployed
+URL. All settings (all optional): `server/.env.example`. Details:
+`server/README.md`.
 
 ### Viewing gateway statistics
 
@@ -366,22 +364,35 @@ different, more accurate description — do not repeat the previous answer"),
 then re-downloads the image under the corrected name.
 
 > **Limitation (by design):** Chrome extensions cannot rename files on
-> disk after download. This downloads a **corrected copy** — you may want
+> disk after download. This downloads a **corrected copy**, so you may want
 > to delete the old file. The popup says so next to the button.
 
 Two server-side scenarios:
 
-- **Last result was a cache hit** → force a fresh model pass, then
+- **Last result was a cache hit**: force a fresh model pass, then
   **overwrite the cache entry** for that pHash, so everyone who would have
   hit that entry gets the corrected answer instead of repeating the
   mistake.
-- **Last result was a fresh model call** → fresh pass with the negative
+- **Last result was a fresh model call**: fresh pass with the negative
   example; cache untouched (it was never cached in the first place).
 
 Both log as corrections with the previous wrong slug and which scenario
 applied — correction frequency is itself a tracked metric. The flow is
 chainable: after a correction, the popup state updates to the new result,
 so clicking again corrects the latest attempt.
+
+---
+
+## Repository structure
+
+This repo contains four parts:
+
+| folder | what it is |
+|---|---|
+| `extension/` | Manifest V3 Chromium extension (no build step) |
+| `worker/` | Cloudflare Worker — the shared keyless "Daemon" classifier (Gemini) |
+| `service/` | **Classifier service** — Qwen3-VL-4B + OCR, Docker, platform-agnostic; you run it yourself (see above) |
+| `server/` | **Shared gateway** — Redis phash cache + per-provider rate limiting + SQLite metrics in front of ALL providers (see above) |
 
 ---
 
@@ -402,30 +413,45 @@ The extension has no build step — reload it from `chrome://extensions`.
 
 <a id="russian"></a>
 
-# Daemon Names Memes
-
 **[English](#english) | [Русский](#russian)**
 
 ---
 
 Браузерное расширение, которое переименовывает картинки при сохранении:
-правый клик на любое изображение → «Сохранить изображение как мем» →
-визионная модель определяет, что на картинке, и файл сохраняется с осмысленным
-именем (`distracted-boyfriend.jpg`) на языке и в письменности самого мема —
-или с аккуратной датой, если это не мем.
-
-В репозитории четыре части:
-
-| папка | что это |
-|---|---|
-| `extension/` | Chromium-расширение Manifest V3 (без шага сборки) |
-| `worker/` | Cloudflare Worker — общий сервер «Daemon» без ключа (Gemini) |
-| `service/` | Сервис классификации: Qwen3-VL-4B + OCR, Docker, платформенно-независимый (см. ниже) |
-| `server/` | **Общий шлюз** — pHash-кэш в Redis + rate limiting по провайдерам + метрики в SQLite перед ВСЕМИ провайдерами (см. ниже) |
-
----
+1. правый клик на любое изображение
+2. «Сохранить изображение как мем»
+3. модель определяет, что на картинке, и файл сохраняется с осмысленным именем (`absolute-breakcore-meme.jpeg`) 
+Именование идет на языке самого мема или с датой скачивания, если это не мем.
 
 ## Расширение
+
+**Правый клик на мем — и он переименован.** Расширение добавляет
+«Сохранить изображение как мем» прямо в нативное контекстное меню браузера —
+открывать отдельный интерфейс не нужно, лишний клик тоже не нужен.
+
+![Контекстное меню с пунктом «Сохранить изображение как мем»](pictures/context-menu.png)
+
+**Файл сохраняется с настоящим именем.** Вместо `asdASFasYQc.jpeg` диалог
+сохранения предлагает slug, который VLM сгенерировала по
+содержимому картинки — здесь это `absolute-breakcore-meme.jpeg`.
+
+![Диалог сохранения с автоматически сгенерированным именем файла](pictures/save-dialog.png)
+
+**Всплывающее окно расширения показывает, что только что произошло.** Активный провайдер и ключ,
+использование rate limit за сессию, превью последней классификации с
+кнопкой «Rename last» в один клик, если модель ошиблась, и счётчик
+переименованных мемов.
+
+![Попап расширения с активным ключом, rate limit, последней классификацией и кнопкой переименования](pictures/popup.png)
+
+**Настройки отвечают за всё остальное.** Выбор провайдера классификации (или
+собственный API-ключ), префикс имени файла и формат даты, момент
+срабатывания переименования и способ сохранения, а также опциональный
+адрес собственного шлюза.
+
+![Страница настроек с выбором провайдера и параметрами именования/триггера/сохранения|700](pictures/settings.png)
+
+---
 
 ### Что оно умеет
 
@@ -435,7 +461,7 @@ The extension has no build step — reload it from `chrome://extensions`.
 - Умные лимиты: свои ключи без лимита, общий сервер Daemon — 5 вызовов в
   минуту, лимит проверяется на сервере.
 - Необязательный префикс имён, выбор формата даты для не-мемов, панель
-  статистики в попапе, локализация EN + RU.
+  статистики во всплывающем окне, локализация EN + RU.
 
 ### С чего начать
 
@@ -445,23 +471,23 @@ The extension has no build step — reload it from `chrome://extensions`.
 
 ### Провайдеры
 
-| Провайдер | Нужен ключ | Лимит | Полезно знать |
-|---|---|---|---|
-| DAEMON | Нет | 5/мин (на сервере) | По умолчанию, общий сервер, Gemini |
-| DAEMON2 | Нет | — | **Недоступен.** Самостоятельно хостируемый `service/` (Qwen3-VL-4B + OCR) — см. ниже. В настройках показан как отключённая карточка; выбрать нельзя, пока не появится реальный хостинг. |
-| Google | Да | Без лимита | Gemini vision |
-| Anthropic | Да | Без лимита | Claude vision |
-| OpenAI | Да | Без лимита | GPT vision |
-| OpenRouter | Да | Без лимита | Один ключ на множество моделей |
-| Groq | Да | Без лимита | Llama vision, очень быстрый |
-| Mistral | Да | Без лимита | Pixtral vision |
-| xAI | Да | Без лимита | Grok vision |
+| Провайдер  | Без ключа | Лимит              | Полезно знать                                                                                                                                                    |
+| ---------- | --------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DAEMON     | Да        | 5/мин (на сервере) | По умолчанию, общий сервер, Gemini                                                                                                                               |
+| DAEMON2    | Да        | —                  | *(Пока недоступен)* `service/` (Qwen3-VL-4B + OCR) — см. ниже. В настройках показан как отключённая карточка; выбрать нельзя, пока не появится реальный хостинг. |
+| Google     | Нет       | Без лимита         | Gemini vision                                                                                                                                                    |
+| Anthropic  | Нет       | Без лимита         | Claude vision                                                                                                                                                    |
+| OpenAI     | Нет       | Без лимита         | GPT vision                                                                                                                                                       |
+| OpenRouter | Нет       | Без лимита         | Один ключ на множество моделей                                                                                                                                   |
+| Groq       | Нет       | Без лимита         | Llama vision, очень быстрый                                                                                                                                      |
+| Mistral    | Нет       | Без лимита         | Pixtral vision                                                                                                                                                   |
+| xAI        | Нет       | Без лимита         | Grok vision                                                                                                                                                      |
 
 Ключи остаются в браузере и отправляются только выбранному провайдеру.
 
 ---
 
-## Cloudflare Worker (сервер «Daemon»)
+## Cloudflare Worker (`worker\`)
 
 Нужен только для бессключевого провайдера Daemon:
 
@@ -479,13 +505,14 @@ npm run deploy
 
 ---
 
-## Самостоятельно хостируемый сервис классификации (`service/`)
+## Сервис классификации (`service/`)
 
 Портативная альтернатива общему worker'у Daemon: обычный HTTP JSON API в
 стандартном Docker-контейнере, одинаково работающий на любом хосте с
 Docker. Никакого платформенно-специфичного кода — вся конфигурация хоста
 через переменные окружения (единый слой конфигурации,
-`service/.env.example`).
+`service/.env.example`). Это не готовый хостинг, так как он бы потребовал ресурсов,
+так что запускать его нужно самому, на своей инфраструктуре.
 
 ### Архитектура: двухэтапный конвейер
 
@@ -571,8 +598,8 @@ docker run --rm -p 8080:8080 \
 `service/models/`). Требования: **≥ 4 ГБ RAM** (VLM Q4_K_M на пике ~3.5 ГБ
 RSS), любой x86_64-хост с Docker, доступ к huggingface.co. Только CPU;
 ожидайте многомиллисекундные задержки на запрос (~20–30 с при 384 px на
-4–12-поточном CPU) и холодные старты в несколько минут. **Сейчас холодный
-старт — не та проблема, которую стоит оптимизировать**: см. раздел
+4–12-поточном CPU) и холодные старты в несколько минут. Сейчас холодный
+старт это не та проблема, которую стоит оптимизировать: см. раздел
 «Платформы деплоя» ниже — бесплатного тарифа, способного вообще запустить
 этот контейнер, пока нет, так что медленный старт на хосте, на котором мы
 всё равно не можем запуститься, не имеет значения. Не «чините» задержку
@@ -589,15 +616,6 @@ Redis-лимитеру шлюза по провайдерам, а nginx доба
 защиты от флуда впереди. Cloudflare Worker (`worker/`) сохраняет свой
 серверный лимит (5/мин через Durable Object), чтобы оставаться безопасным и
 для прямых вызовов.
-
-### Кэширование
-
-Перцептивное кэширование (pHash) теперь живёт в общем шлюзе (`server/`) —
-результаты всех провайдеров пополняют ОДИН общий Redis-кэш, так что мем,
-уже классифицированный кем угодно через любого провайдера, мгновенно
-отдаётся всем остальным. См. «Общий шлюз» ниже. (У standalone `service/`
-кэша нет — это исполнитель моделей; кэширование — задача шлюза.)
-
 ### Платформы деплоя (доказательство портативности)
 
 Образ не привязан к хосту; различаются только команды деплоя.
@@ -664,7 +682,8 @@ OOM (нужно ≥4 ГБ); у **Fly.io** бесплатного тарифа б
 Daemon2 (service/) и всех провайдеров со своим ключом — через собственный
 шлюз проекта (`OWNER_GATEWAY_URL` в `extension/background.js`; пользователь
 может указать свой инстанс в Настройках → Gateway URL). Один шлюз = одна
-общая база данных:
+общая база данных, и он намеренно лёгкий: **только кэш и метрики**, без
+собственной модели и без собственного rate limiting.
 
 - **Общий pHash-кэш (Redis).** Каждый результат классификации от любого
   провайдера кэшируется по перцептивному хешу (порог Хэмминга 8,
@@ -672,12 +691,12 @@ Daemon2 (service/) и всех провайдеров со своим ключо
   Gemini, мгновенно отдаётся из кэша другому, запросившему его через Claude
   — ключи кэша намеренно не зависят от провайдера. Попадание в кэш
   полностью пропускает вызов модели (активно гейтит запросы, а не просто
-  логирует).
-- **Общий rate limiting (Redis).** Бесключевые провайдеры (`daemon2`,
-  `worker`) ограничены на сервере (5/мин на клиента, клиент не может
-  повысить; nginx `limit_req` впереди как грубая защита от флуда).
-  Провайдеры со своим ключом освобождены от лимитера шлюза — ваш ключ,
-  ваши расходы — но кэш и метрики остаются общими.
+  логирует). Поиск в кэше — multi-index поиск по Хэммингу вместо загрузки
+  всего кэша на каждый запрос; `CACHE_TTL_S` работает для каждой записи.
+- **Без rate limiter в шлюзе.** Лимиты остаются там, где уже есть: nginx
+  `limit_req` на входе, собственный per-IP лимитер `service/`, Durable
+  Object воркера и ваша собственная квота для своих ключей. `429` от
+  провайдера доходит до расширения как `429` с `retry_after_seconds`.
 - **Общий лог метрик (SQLite).** Каждый запрос пишет провайдера, режим,
   задержки по этапам, попадание в кэш + расстояние Хэмминга, ошибки и
   события коррекции (`was_correction`, `previous_wrong_slug`,
@@ -689,30 +708,13 @@ Daemon2 (service/) и всех провайдеров со своим ключо
   долю коррекций с разбивкой по сценариям (много коррекций попаданий кэша →
   порог слишком свободный; много коррекций свежих вызовов → проблема в
   промпте/модели).
-
-Деплой: `cd server && docker compose up --build` (приложение + Redis +
-nginx; варианты деплоя Redis, конфиг и справочник API — в
-`server/README.md`). Затем впишите задеплоенный URL в `OWNER_GATEWAY_URL` в
-`extension/background.js`.
-
-### Лёгкий шлюз (текущее поведение)
-
-Шлюз теперь намеренно лёгкий: **только кэш и метрики**. Где это расходится
-с описанием выше, действует этот раздел.
-
-- **Без rate limiter в шлюзе.** Лимиты остаются там, где уже есть: nginx
-  `limit_req` на входе, собственный per-IP лимитер `service/`, Durable
-  Object воркера и ваша собственная квота для своих ключей. `429` от
-  провайдера доходит до расширения как `429` с `retry_after_seconds`.
 - **Не привязан к daemon2.** Шлюз не запускает модели и не содержит
   `service/`: каждый провайдер — асинхронный HTTP-вызов. daemon2 включается
   через `SERVICE_URL` (без него — `503`, попадания в кэш всё равно
   отдаются). Провайдер по умолчанию — `worker`.
 - **Масштабируется.** Асинхронный Redis + общий пул HTTP, хеширование
   изображений вне event loop, пакетная фоновая запись в SQLite, несколько
-  воркеров uvicorn (`WEB_CONCURRENCY`). Поиск в кэше — multi-index поиск по
-  Хэммингу вместо загрузки всего кэша на каждый запрос; `CACHE_TTL_S`
-  работает для каждой записи.
+  воркеров uvicorn (`WEB_CONCURRENCY`).
 - **Уживается с другими приложениями.** Уникальное имя compose-проекта;
   nginx публикуется на `127.0.0.1:8090` (а не `0.0.0.0:80`), Redis и
   приложение не публикуются; nginx отдаёт только `/classify`, `/correct`,
@@ -725,8 +727,9 @@ cd server && docker compose up -d --build                     # шлюз + Redis
 SERVICE_URL=http://service:8080 docker compose --profile daemon2 up -d --build   # + daemon2
 ```
 
-Все настройки (все необязательные): `server/.env.example`. Подробности:
-`server/README.md` → "Lite gateway".
+Затем впишите задеплоенный URL в `OWNER_GATEWAY_URL` в
+`extension/background.js`. Все настройки (все необязательные):
+`server/.env.example`. Подробности: `server/README.md`.
 
 ### Просмотр статистики шлюза
 
@@ -775,22 +778,34 @@ curl http://localhost:8090/health
 
 > **Ограничение (по замыслу):** Chrome-расширения не умеют переименовывать
 > файлы на диске после скачивания. Это скачивает **исправленную копию** —
-> старый файл, возможно, стоит удалить. Попап говорит об этом рядом с
-> кнопкой.
+> старый файл, возможно, стоит удалить. Это сказано во всплывающем окне.
 
 Два серверных сценария:
 
-- **Прошлый результат был попаданием в кэш** → принудительный свежий
+- **Прошлый результат был попаданием в кэш**: принудительный свежий
   проход модели, затем **перезапись записи кэша** для этого pHash, чтобы
   все, кто попал бы на эту запись, получили исправленный ответ, а не
   повтор ошибки.
-- **Прошлый результат был свежим вызовом модели** → свежий проход с
+- **Прошлый результат был свежим вызовом модели**: свежий проход с
   негативным примером; кэш не трогается (он и не был закэширован).
 
 Оба сценария логируются как коррекции с прежним неверным slug и признаком
 сценария — частота коррекций сама является метрикой. Поток цепочечный: после
 коррекции состояние попапа обновляется новым результатом, так что повторный
 клик исправляет уже последнюю попытку.
+
+---
+
+## Структура репозитория
+
+В репозитории четыре части:
+
+| папка | что это |
+|---|---|
+| `extension/` | Chromium-расширение Manifest V3 (без шага сборки) |
+| `worker/` | Cloudflare Worker — общий сервер «Daemon» без ключа (Gemini) |
+| `service/` | **Сервис классификации** — Qwen3-VL-4B + OCR, Docker, платформенно-независимый; хостить нужно самому (см. выше) |
+| `server/` | **Общий шлюз** — pHash-кэш в Redis + rate limiting по провайдерам + метрики в SQLite перед ВСЕМИ провайдерами (см. выше) |
 
 ---
 
