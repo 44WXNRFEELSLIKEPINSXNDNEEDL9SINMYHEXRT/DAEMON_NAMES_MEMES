@@ -2,17 +2,20 @@
 <p align="center">
   <img src="pictures/logo.png" alt="Logo">
 </p>
+<div align="center">
 
-**[English](#english) | [Русский](#russian)**
+  **[English](#english) | [Русский](#russian)**
+</div>
 
 ---
 
 <a id="english"></a>
 
 A browser extension that renames images as you save them: 
-1. right-click any image
+1. Right-click any image
 2. "Save image as meme"
-3. a vision model classifies it and the file is saved with a meaningful name (`absolute-breakcore-meme.jpeg`)
+3. A vision model classifies it and the file is saved with a meaningful name (`absolute-breakcore-meme.jpeg`)
+
 Naming is in the meme's own language and script or with a clean date if it's not a meme.
 
 ## Extension
@@ -21,27 +24,34 @@ Naming is in the meme's own language and script or with a clean date if it's not
 to the browser's native context menu — no separate UI to open, no extra
 click beyond the one you'd make anyway to save the image.
 
-![Context menu with "Save image as meme"](pictures/context-menu.png)
-
+<p align="center">
+  <img src="pictures/context-menu.png" alt="Context menu option">
+<p>
 **The file lands with a real name.** Instead of `image (4).jpeg`, the save
 dialog offers a slug the vision model generated from what's actually in the
 picture — here `absolute-breakcore-meme.jpeg`.
 
-![Save dialog showing the auto-generated filename](pictures/save-dialog.png)
+<p align="center">
+  <img src="pictures/save-dialog.png" alt="Save dialog showing the auto-generated filename">
+<p>
 
 **The popup tracks what just happened.** Active provider and key, this
 session's rate-limit usage, a thumbnail of the last classification with a
 one-click "Rename last" if the model got it wrong, and a running count of
 memes named.
 
-![Extension popup with active key, rate limit, last classification and rename button](pictures/popup.png)
+<p align="center">
+  <img src="pictures/popup.png" alt="Extension popup with active key, rate limit, last classification and rename button">
+<p>
 
 **Settings covers the rest.** Pick a classification provider (or bring your
 own API key), set a filename prefix and date format, choose when renaming
 triggers and where files save, and optionally point the extension at your
 own gateway instance.
 
-![Settings page with provider selection and naming/trigger/destination options](pictures/settings.png)
+<p align="center">
+  <img src="pictures/settings.png" alt="Settings page with provider selection and naming/trigger/destination options">
+<p>
 
 ---
 
@@ -138,6 +148,10 @@ image (base64) ──► OCR pre-pass ──┬─ manual mode, conf ≥ thresho
 ### API contract
 
 `POST /classify`
+
+<p align="center">
+  <img src="worker/test.png" alt="Meme">
+<p>
 
 ```json
 // request
@@ -415,14 +429,18 @@ The extension has no build step — reload it from `chrome://extensions`.
 
 <a id="russian"></a>
 
-**[English](#english) | [Русский](#russian)**
+<div align="center">
+
+  **[English](#english) | [Русский](#russian)**
+</div>
 
 ---
 
 Браузерное расширение, которое переименовывает картинки при сохранении:
-1. правый клик на любое изображение
+1. Правый клик на любое изображение
 2. «Сохранить изображение как мем»
-3. модель определяет, что на картинке, и файл сохраняется с осмысленным именем (`absolute-breakcore-meme.jpeg`) 
+3. Модель определяет, что на картинке, и файл сохраняется с осмысленным именем (`absolute-breakcore-meme.jpeg`)
+
 Именование идет на языке самого мема или с датой скачивания, если это не мем.
 
 ## Расширение
@@ -431,27 +449,35 @@ The extension has no build step — reload it from `chrome://extensions`.
 «Сохранить изображение как мем» прямо в нативное контекстное меню браузера —
 открывать отдельный интерфейс не нужно, лишний клик тоже не нужен.
 
-![Контекстное меню с пунктом «Сохранить изображение как мем»](pictures/context-menu.png)
+<p align="center">
+  <img src="pictures/context-menu.png" alt="Context menu option">
+<p>
 
 **Файл сохраняется с настоящим именем.** Вместо `asdASFasYQc.jpeg` диалог
 сохранения предлагает slug, который VLM сгенерировала по
 содержимому картинки — здесь это `absolute-breakcore-meme.jpeg`.
 
-![Диалог сохранения с автоматически сгенерированным именем файла](pictures/save-dialog.png)
+<p align="center">
+  <img src="pictures/save-dialog.png" alt="Save dialog showing the auto-generated filename">
+<p>
 
 **Всплывающее окно расширения показывает, что только что произошло.** Активный провайдер и ключ,
 использование rate limit за сессию, превью последней классификации с
 кнопкой «Rename last» в один клик, если модель ошиблась, и счётчик
 переименованных мемов.
 
-![Попап расширения с активным ключом, rate limit, последней классификацией и кнопкой переименования](pictures/popup.png)
+<p align="center">
+  <img src="pictures/popup.png" alt="Extension popup with active key, rate limit, last classification and rename button">
+<p>
 
 **Настройки отвечают за всё остальное.** Выбор провайдера классификации (или
 собственный API-ключ), префикс имени файла и формат даты, момент
 срабатывания переименования и способ сохранения, а также опциональный
 адрес собственного шлюза.
 
-![Страница настроек с выбором провайдера и параметрами именования/триггера/сохранения|700](pictures/settings.png)
+<p align="center">
+  <img src="pictures/settings.png" alt="Settings page with provider selection and naming/trigger/destination options">
+<p>
 
 ---
 
@@ -470,6 +496,8 @@ The extension has no build step — reload it from `chrome://extensions`.
 1. Откройте `chrome://extensions` в любом Chromium-браузере.
 2. Включите режим разработчика.
 3. Нажмите «Загрузить распакованное расширение» и выберите папку `extension`.
+
+> Чтобы получить бесплатный ключ API Gemini, перейдите в Google AI Studio, войдите в свою учетную запись Google и нажмите кнопку «Получить ключ API». Google может изменить условия.
 
 ### Провайдеры
 
@@ -547,6 +575,10 @@ Docker. Никакого платформенно-специфичного ко�
 ### Контракт API
 
 `POST /classify`
+
+<p align="center">
+  <img src="worker/test.png" alt="Meme">
+<p>
 
 ```json
 // запрос
