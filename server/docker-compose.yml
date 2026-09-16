@@ -1,0 +1,103 @@
+# Lite gateway stack: gateway (server/) + Redis + nginx edge.
+#
+#   cd server && cp .env.example .env   # optional, every value has a default
+#   docker compose up -d --build
+#
+# Plays well with other applications on the same host:
+#   - unique project name (containers/volumes/network are prefixed with it);
+#   - nginx is published on 127.0.0.1:8090 by default, not 0.0.0.0:80. Put
+#     your existing host reverse proxy in front of it, or set GATEWAY_BIND /
+#     GATEWAY_PORT to publish it directly;
+#   - Redis and the app are never published to the host.
+#
+# daemon2 (self-hosted OCR+VLM, ~3 GB models) is opt-in:
+#   SERVICE_URL=http://service:8080 docker compose --profile daemon2 up -d --build
+name: ${COMPOSE_PROJECT_NAME:-daemon-names-memes}
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Pure cache: bounded memory with LRU eviction, AOF so it survives
+    # restarts. Evicted index members are cleaned up lazily by the app.
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-256mb}
+      - --maxmemory-policy
+      - allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      METRICS_DB_PATH: /data/metrics.sqlite3
+      PORT: "8090"
+      # The app port is only reachable from nginx on this compose network,
+      # and nginx overwrites X-Forwarded-For, so trusting any peer is safe.
+      FORWARDED_ALLOW_IPS: "*"
+      SERVICE_URL: ${SERVICE_URL:-}
+    volumes:
+      - metrics-data:/data
+    expose:
+      - "8090"
+    # Also declared here: OCI-format builds (podman) drop Dockerfile HEALTHCHECK.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "${GATEWAY_BIND:-127.0.0.1}:${GATEWAY_PORT:-8090}:80"
+    environment:
+      NGINX_SERVER_NAME: ${NGINX_SERVER_NAME:-_}
+      NGINX_TRUSTED_PROXY: ${NGINX_TRUSTED_PROXY:-127.0.0.1/32}
+      NGINX_RATE_LIMIT: ${NGINX_RATE_LIMIT:-30r/m}
+      NGINX_RATE_BURST: ${NGINX_RATE_BURST:-10}
+      NGINX_ENVSUBST_FILTER: ^NGINX_
+    volumes:
+      # ",z" relabels for SELinux hosts (Fedora/RHEL); ignored elsewhere.
+      - ./nginx:/etc/nginx/templates:ro,z
+
+  # Optional daemon2 provider (service/). Not published; reachable only by the
+  # gateway, which forwards the real client IP — hence TRUST_PROXY=1 here.
+  service:
+    profiles: ["daemon2"]
+    build: ../service
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      RATE_LIMIT_TRUST_PROXY: "1"
+    volumes:
+      - models-data:/app/models
+    expose:
+      - "8080"
+
+volumes:
+  redis-data:
+  metrics-data:
+  models-data:

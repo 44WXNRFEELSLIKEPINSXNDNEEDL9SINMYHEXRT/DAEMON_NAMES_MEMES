@@ -55,11 +55,20 @@ export default {
       });
     }
 
-    const { image, mimeType, locale } = await request.json() as {
+    const { image, mimeType, locale, rejectSlug } = await request.json() as {
 		image: string;
 		mimeType: string;
 		locale: string;
+		rejectSlug?: string;
 	};
+
+    // "Rename last" correction flow (server/ gateway forwards this field):
+    // inject the rejected slug as an explicit negative example so the model
+    // produces a genuinely different answer. Omitted for normal requests —
+    // fully backward compatible with the existing extension payload.
+    const rejectionNote = rejectSlug
+      ? `\nA previous attempt at naming this image produced: '${rejectSlug}'. This was flagged as incorrect by the user. Look at the image again more carefully and produce a different, more accurate description — do not repeat the previous answer or a close variant of it.\n`
+      : "";
 
     const geminiResp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent`,
@@ -73,7 +82,7 @@ export default {
           contents: [{
             parts: [
               {
-                text: `Look at this image. Determine if it's a meme (has overlaid text, a recognizable meme template, or is clearly satirical/humorous internet content).
+                text: `Look at this image. Determine if it's a meme (has overlaid text, a recognizable meme template, or is clearly satirical/humorous internet content).${rejectionNote}
 				Respond ONLY with JSON in this exact shape, no markdown fences:
 				{"isMeme": boolean, "filenameSlug": "short-kebab-case-description", "tags": ["tag1","tag2"]}
 

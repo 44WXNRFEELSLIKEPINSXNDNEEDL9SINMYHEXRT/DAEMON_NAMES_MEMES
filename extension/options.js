@@ -19,8 +19,16 @@ const DEFAULTS = {
   namingPrefix: "",
   dateFormat: "system",
   downloadMode: "context",
-  saveMethod: "direct"
+  saveMethod: "direct",
+  gatewayUrl: ""
 };
+
+// "1.2.3.4:8090" -> "http://1.2.3.4:8090": fetch() needs a scheme.
+function normalizeGatewayUrl(value) {
+  const url = (value || "").trim().replace(/\/+$/, "");
+  if (!url) return "";
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `http://${url}`;
+}
 
 function formatDate(date, format) {
   const yyyy = date.getFullYear();
@@ -64,7 +72,7 @@ function buildProviderCards() {
     if (unavailable) {
       // No radio, no key/rate fields — purely informational, cannot be selected.
       return `
-        <div class="provider is-unavailable" data-provider="${p.id}" aria-disabled="true">
+        <div class="provider is-unavailable span-2" data-provider="${p.id}" aria-disabled="true">
           <div class="provider-row">
             <span class="provider-label provider-label-disabled">
               <input type="radio" disabled>
@@ -75,10 +83,10 @@ function buildProviderCards() {
           </div>
           <div class="provider-fields provider-fields-static">
             <p class="unavailable-hint">
-              Self-hosted two-stage OCR + Qwen3-VL-4B classifier — see <code>service/</code>.
-              No free-tier CPU host fits the ≥4&nbsp;GB RAM footprint, so this provider isn't
-              reachable yet. Cold start isn't the blocker here — it can't be launched anywhere
-              free at all right now. Tracked for a future release once it's actually hosted.
+              Two-stage OCR + Qwen3-VL-4B classifier — see <code>service/</code>. No free-tier
+              CPU host fits the ≥4&nbsp;GB RAM footprint, so this provider isn't reachable yet.
+              Cold start isn't the blocker here — it can't be launched anywhere free at all
+              right now. Tracked for a future release once it's actually hosted somewhere.
             </p>
           </div>
         </div>`;
@@ -102,7 +110,7 @@ function buildProviderCards() {
          </div>`;
 
     return `
-      <div class="provider" data-provider="${p.id}">
+      <div class="provider${locked ? " span-2" : ""}" data-provider="${p.id}">
         <div class="provider-row">
           <label class="provider-label">
             <input type="radio" name="apiProvider" value="${p.id}">
@@ -134,6 +142,7 @@ function load() {
     document.getElementById("dateFormat").value = settings.dateFormat || "system";
     document.getElementById("downloadMode").value = settings.downloadMode || "context";
     document.getElementById("saveMethod").value = settings.saveMethod || "direct";
+    document.getElementById("gatewayUrl").value = normalizeGatewayUrl(settings.gatewayUrl);
     updateDatePreview();
   });
 }
@@ -156,7 +165,8 @@ function save() {
     namingPrefix: document.getElementById("prefix").value.trim(),
     dateFormat: document.getElementById("dateFormat").value,
     downloadMode: document.getElementById("downloadMode").value,
-    saveMethod: document.getElementById("saveMethod").value
+    saveMethod: document.getElementById("saveMethod").value,
+    gatewayUrl: normalizeGatewayUrl(document.getElementById("gatewayUrl").value)
   };
 
   chrome.storage.local.set(settings, () => {

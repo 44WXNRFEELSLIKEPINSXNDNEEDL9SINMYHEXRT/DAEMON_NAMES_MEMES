@@ -1,0 +1,10 @@
+# Gateway (server/) runtime — cache + metrics + HTTP proxying only. No
+# model/OCR stack: daemon2 is reached over HTTP (SERVICE_URL), so this image
+# stays small. Pinned; tested on Python 3.11.
+fastapi==0.141.1
+uvicorn==0.52.4
+pydantic==2.13.5
+redis==8.1.0
+imagehash==4.3.2
+pillow==12.3.0
+httpx==0.28.1

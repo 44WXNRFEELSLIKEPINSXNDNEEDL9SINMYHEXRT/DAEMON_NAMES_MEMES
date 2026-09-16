@@ -5,7 +5,8 @@ FastAPI is the entrypoint: a plain HTTP JSON API, platform-agnostic
 (any Docker-capable host; all host config via env vars, see config.py).
 
   POST /classify  {"image": "<base64>", "mimeType": "image/png",
-                   "locale": "ru", "mode": "manual"|"auto"}
+                   "locale": "ru", "mode": "manual"|"auto",
+                   "rejectSlug": "<optional, correction flow>"}
   ->              {"isMeme": bool, "filenameSlug": "..."}
 
 The Gradio UI is OPTIONAL (ENABLE_GRADIO_UI=1) — a debug front for the same
@@ -98,17 +99,29 @@ async def classify_endpoint(request: Request):
     mime_type = payload.get("mimeType") or "image/png"
     locale = payload.get("locale") or ""
     mode = payload.get("mode") or "auto"
-    if not all(isinstance(v, str) for v in (image, mime_type, locale, mode)):
+    # Optional "Rename last" negative example (sent by the server/ gateway).
+    reject_slug = payload.get("rejectSlug") or None
+    if not all(isinstance(v, str) for v in (image, mime_type, locale, mode)) \
+            or not isinstance(reject_slug, (str, type(None))):
         return JSONResponse(status_code=400, content=_error("invalid_field_types"))
+    if reject_slug:
+        reject_slug = reject_slug.strip()[:120] or None
 
     # Blocking model work runs off the event loop so /health stays responsive.
     import anyio
-    result = await anyio.to_thread.run_sync(
-        pipeline.classify, image, mime_type, locale, mode
+    detail = await anyio.to_thread.run_sync(
+        lambda: pipeline.classify_detailed(image, mime_type, locale, mode, reject_slug=reject_slug)
     )
-    resp = JSONResponse(content=result)
+    resp = JSONResponse(content=detail["result"])
     if remaining >= 0:
         resp.headers["X-RateLimit-Remaining"] = str(remaining)
+    # Per-stage timings for the gateway's metrics log; the body contract is
+    # unchanged for direct callers.
+    resp.headers["X-Pipeline-Path"] = str(detail.get("path", "unknown"))
+    resp.headers["X-OCR-Seconds"] = f"{detail.get('ocr_seconds', 0.0):.3f}"
+    resp.headers["X-VLM-Seconds"] = f"{detail.get('vlm_seconds', 0.0):.3f}"
+    resp.headers["X-OCR-Used"] = "1" if detail.get("ocr_used") else "0"
+    resp.headers["X-VLM-Ran"] = "1" if detail.get("vlm_ran") else "0"
     return resp
 
 

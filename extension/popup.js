@@ -16,7 +16,9 @@ const DEFAULTS = {
     xai: { windowStart: 0, count: 0 }
   },
   stats: { totalDownloaded: 0, totalClassified: 0 },
-  lastPreview: null // { imageDataUrl, filenameSlug, isMeme, timestamp }
+  lastPreview: null, // { imageDataUrl, filenameSlug, isMeme, timestamp,
+                     //   provider, mode, sourceUrl, mimeType, phash, cacheHit }
+  gatewayUrl: ""
 };
 
 function maskKey(key) {
@@ -42,6 +44,9 @@ function render(settings) {
   keyEl.classList.remove("unset", "server");
   if (provider === "worker") {
     keyEl.textContent = "daemon server · no key needed";
+    keyEl.classList.add("server");
+  } else if (provider === "daemon2") {
+    keyEl.textContent = "service/ instance · no key needed";
     keyEl.classList.add("server");
   } else if (key) {
     keyEl.textContent = maskKey(key);
@@ -77,17 +82,50 @@ function render(settings) {
       <span class="preview-name">${settings.lastPreview.filenameSlug}</span>
       <span class="preview-tag">${settings.lastPreview.isMeme ? "classified as meme" : "not a meme"}</span>
     `;
+    // "Rename last" needs the original image source URL to re-download from;
+    // records saved before this feature existed (or from direct-call providers
+    // without gateway metadata) still work — the correction just runs
+    // scenario B (fresh call) without cache bookkeeping.
+    renameLastBtn.disabled = !settings.lastPreview.sourceUrl;
   } else {
     thumb.style.display = "none";
     info.innerHTML = `<span class="preview-empty">No memes classified yet</span>`;
+    renameLastBtn.disabled = true;
   }
 }
+
+let renameLastBtn;
 
 function load() {
   chrome.storage.local.get(DEFAULTS, render);
 }
 
+function setRenameStatus(text, cls) {
+  const el = document.getElementById("renameLastStatus");
+  el.textContent = text;
+  el.className = `rename-last-status ${cls}`;
+}
+
+async function onRenameLast() {
+  renameLastBtn.disabled = true;
+  setRenameStatus("correcting…", "");
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: "rename-last" });
+    if (resp?.ok) {
+      setRenameStatus(`saved as "${resp.filenameSlug}"`, "ok");
+    } else {
+      setRenameStatus(`failed: ${resp?.error || "unknown error"}`, "err");
+    }
+  } catch (err) {
+    setRenameStatus(`failed: ${err?.message || err}`, "err");
+  } finally {
+    load(); // re-render from updated lastPreview (chains onto the new attempt)
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  renameLastBtn = document.getElementById("renameLastBtn");
+  renameLastBtn.addEventListener("click", onRenameLast);
   load();
 
   document.getElementById("openOptions").addEventListener("click", (e) => {
