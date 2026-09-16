@@ -857,3 +857,7 @@ cd server && docker compose up --build      # полный стек шлюза
 
 У расширения нет шага сборки — просто перезагрузите его на
 `chrome://extensions`.
+
+---
+
+<a href="https://www.flaticon.com/free-icons/demon" title="demon icons">Demon icons created by Magnific - Flaticon</a>
