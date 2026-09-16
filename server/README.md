@@ -3,6 +3,101 @@
 Shared gateway in front of ALL classification providers. User-facing docs
 (EN/RU): root `README.md`, sections "Shared gateway" / «Общий шлюз».
 
+## Lite gateway
+
+> Current behavior. Where later sections of this file describe the gateway
+> importing `service/pipeline.py` in-process, the Redis per-provider rate
+> limiter (`ratelimit.py`), `RATE_LIMIT_*` settings, or publishing nginx on
+> port 80, this section supersedes them.
+
+The gateway does **caching and metrics only**; model work always happens
+upstream over HTTP.
+
+| concern | where it lives now |
+|---|---|
+| pHash cache | `cache.py` — async Redis, multi-index Hamming lookup (below) |
+| metrics | `metrics.py` — SQLite, batched background writer thread per process |
+| providers | `providers.py` — one pooled `httpx.AsyncClient`; daemon2 = `SERVICE_URL`, worker = `WORKER_URL`, BYO-key APIs |
+| rate limiting | not in the app: nginx `limit_req` (edge), `service/ratelimit.py`, the worker's Durable Object |
+| client IP | uvicorn `--proxy-headers` + `FORWARDED_ALLOW_IPS`; nginx overwrites `X-Forwarded-For` |
+
+### API changes (extension contract unchanged)
+
+- `/classify` and `/correct` keep their request/response bodies and the
+  `X-Cache` / `X-Phash` headers (now listed in
+  `Access-Control-Expose-Headers`).
+- Upstream failures are real HTTP statuses instead of a fake
+  `{"isMeme": false}`: `429` (`{"error": "rate_limited",
+  "retry_after_seconds": N}` + `Retry-After`), `502` (upstream error or bad
+  key), `503` (`provider_unavailable`, e.g. daemon2 without `SERVICE_URL`),
+  `504` (upstream timeout). Nothing is cached on failure.
+- A request without `provider` uses `DEFAULT_PROVIDER` (`worker`).
+- `/health` reports `status: ok|degraded`, Redis reachability and which
+  providers are configured; it no longer exposes file paths.
+- `/docs` is off unless `DOCS_ENABLED=1`.
+- `service/` `/classify` accepts an optional `rejectSlug` and returns
+  per-stage timings as `X-OCR-Seconds`, `X-VLM-Seconds`, `X-OCR-Used`,
+  `X-VLM-Ran`, `X-Pipeline-Path` headers (body unchanged), so corrections
+  and the OCR/VLM metrics work over HTTP.
+
+### Cache lookup
+
+A 64-bit pHash is split into `PHASH_HAMMING_THRESHOLD + 1` disjoint
+segments, each with a Redis SET of the hashes sharing that segment value.
+Hashes within the threshold must share at least one segment exactly
+(pigeonhole), so a lookup unions those sets and measures distance on the
+candidates only — no false negatives, ~14x fewer comparisons at threshold 8
+(far fewer at lower thresholds). An exact `GET` runs first. Keys:
+`{CACHE_KEY_PREFIX}e:{phash}` (entry, per-entry TTL) and
+`{CACHE_KEY_PREFIX}s{m}:{i}:{value}` (index). Stale index members are
+pruned lazily. Changing the threshold starts a fresh index namespace
+(existing entries stay reachable by exact match).
+
+Results that daemon2 produced in **manual** mode (isMeme assumed, not
+decided) are cached as slug-only: they serve manual requests, but never an
+isMeme verdict to auto requests.
+
+The old single-hash index (`dnm:cache:index`) from the previous gateway is
+not read; delete it with `redis-cli DEL dnm:cache:index` if it exists.
+
+### Deploying next to other applications
+
+- Compose project name `daemon-names-memes` (override with
+  `COMPOSE_PROJECT_NAME`), so containers/volumes/networks don't collide
+  with other stacks started from a directory named `server`.
+- nginx is published on `${GATEWAY_BIND:-127.0.0.1}:${GATEWAY_PORT:-8090}`.
+  Behind an existing host proxy (nginx/Caddy/Traefik), proxy to that port
+  and set `NGINX_TRUSTED_PROXY` to the proxy's source CIDR so the real
+  client IP is used. To publish directly, set `GATEWAY_BIND=0.0.0.0`.
+- nginx serves only `/classify`, `/correct`, `/health`; everything else is
+  `404`.
+- Redis runs with `maxmemory` (`REDIS_MAXMEMORY`, default `256mb`) and
+  `allkeys-lru`. To use a shared external Redis instead, set `REDIS_URL`
+  (own DB number recommended); all keys are under `CACHE_KEY_PREFIX`.
+- `.env` is optional; see `.env.example` for every setting.
+
+### daemon2
+
+```bash
+SERVICE_URL=http://service:8080 docker compose --profile daemon2 up -d --build
+```
+
+The `service` container is not published and runs with
+`RATE_LIMIT_TRUST_PROXY=1`: the gateway forwards the real client IP, so
+service/'s per-IP limit applies per user rather than to the gateway as a
+whole. Any other service/ deployment works too — point `SERVICE_URL` at it
+(only enable `RATE_LIMIT_TRUST_PROXY` there if it's not publicly reachable).
+
+### Running without Docker
+
+```bash
+cd server && pip install -r requirements.txt
+REDIS_URL=redis://127.0.0.1:6379/0 METRICS_DB_PATH=./data/metrics.sqlite3 \
+  SERVICE_URL=http://127.0.0.1:8080 python app.py          # binds 127.0.0.1:8090
+# tests: no Redis, no models, no network (fakeredis + mocked upstreams)
+for t in _test_*.py; do python "$t"; done                  # needs fakeredis
+```
+
 ## What this is
 
 `server/` is a FastAPI gateway that every provider routes through (by

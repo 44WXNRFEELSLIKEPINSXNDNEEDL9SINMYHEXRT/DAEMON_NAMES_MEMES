@@ -19,6 +19,7 @@ Reports:
 from __future__ import annotations
 
 import argparse
+import os
 import sqlite3
 import statistics
 import sys
@@ -137,7 +138,7 @@ def report(rows: list[sqlite3.Row]) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--db", default="/data/metrics.sqlite3")
+    ap.add_argument("--db", default=os.environ.get("METRICS_DB_PATH", "/data/metrics.sqlite3"))
     ap.add_argument("--days", type=float, default=None, help="only rows from the last N days")
     args = ap.parse_args()
 

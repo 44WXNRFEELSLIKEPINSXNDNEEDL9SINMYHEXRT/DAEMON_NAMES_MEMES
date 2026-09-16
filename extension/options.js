@@ -23,6 +23,13 @@ const DEFAULTS = {
   gatewayUrl: ""
 };
 
+// "1.2.3.4:8090" -> "http://1.2.3.4:8090": fetch() needs a scheme.
+function normalizeGatewayUrl(value) {
+  const url = (value || "").trim().replace(/\/+$/, "");
+  if (!url) return "";
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `http://${url}`;
+}
+
 function formatDate(date, format) {
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, "0");
@@ -135,7 +142,7 @@ function load() {
     document.getElementById("dateFormat").value = settings.dateFormat || "system";
     document.getElementById("downloadMode").value = settings.downloadMode || "context";
     document.getElementById("saveMethod").value = settings.saveMethod || "direct";
-    document.getElementById("gatewayUrl").value = settings.gatewayUrl || "";
+    document.getElementById("gatewayUrl").value = normalizeGatewayUrl(settings.gatewayUrl);
     updateDatePreview();
   });
 }
@@ -159,7 +166,7 @@ function save() {
     dateFormat: document.getElementById("dateFormat").value,
     downloadMode: document.getElementById("downloadMode").value,
     saveMethod: document.getElementById("saveMethod").value,
-    gatewayUrl: document.getElementById("gatewayUrl").value.trim().replace(/\/+$/, "")
+    gatewayUrl: normalizeGatewayUrl(document.getElementById("gatewayUrl").value)
   };
 
   chrome.storage.local.set(settings, () => {

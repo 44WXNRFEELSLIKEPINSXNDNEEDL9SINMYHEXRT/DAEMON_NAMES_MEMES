@@ -1,43 +1,32 @@
-# Gateway container — imports service/pipeline.py in-process (default mode),
-# so this image bundles BOTH server/ and service/ code + dependencies. Build
-# context must be the repo root (see docker-compose.yml: `context: ..`).
-#
-# Platform-agnostic: same convention as service/Dockerfile — all host config
-# via env vars, no code branches per platform.
+# Gateway image — cache + metrics only, no model stack (see requirements.txt).
+# Build context is server/ itself: `docker build -t dnm-gateway server/`.
 FROM python:3.11-slim
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        libgl1 libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    OMP_NUM_THREADS=4 \
-    PORT=8090
+    HOST=0.0.0.0 \
+    PORT=8090 \
+    WEB_CONCURRENCY=2 \
+    FORWARDED_ALLOW_IPS=127.0.0.1 \
+    METRICS_DB_PATH=/data/metrics.sqlite3
 
 WORKDIR /app
 
-# service/'s own requirements (VLM + OCR stack) first, then the gateway's.
-COPY service/requirements.txt ./service-requirements.txt
-RUN pip install --no-cache-dir \
-    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
-    -r service-requirements.txt
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server/requirements.txt ./server-requirements.txt
-RUN pip install --no-cache-dir -r server-requirements.txt
+COPY config.py cache.py metrics.py providers.py app.py analyze_metrics.py ./
 
-# service/ code (pipeline import target) — models/ is NOT copied (3 GB;
-# downloads at runtime, same as service/Dockerfile).
-COPY service/config.py service/ocr.py service/pipeline.py /app/service/
-
-# server/ code
-COPY server/config.py server/cache.py server/ratelimit.py server/metrics.py \
-     server/providers.py server/app.py server/analyze_metrics.py /app/server/
-
-WORKDIR /app/server
-ENV SERVICE_IMPORT_PATH=/app/service
+RUN useradd --uid 10001 --no-create-home --home-dir /app --shell /usr/sbin/nologin gateway \
+    && mkdir -p /data && chown gateway:gateway /data
+USER gateway
 
 VOLUME ["/data"]
 EXPOSE 8090
-CMD ["sh", "-c", "exec uvicorn app:app --host 0.0.0.0 --port ${PORT}"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/health', timeout=4)"
+
+# uvicorn reads WEB_CONCURRENCY and FORWARDED_ALLOW_IPS from the environment.
+CMD ["sh", "-c", "exec uvicorn app:app --host \"$HOST\" --port \"$PORT\" --proxy-headers --no-server-header"]

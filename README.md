@@ -288,6 +288,76 @@ Deploy: `cd server && docker compose up --build` (app + Redis + nginx; see
 reference). Then set `OWNER_GATEWAY_URL` in `extension/background.js` to
 the deployed URL.
 
+### Lite gateway (current behavior)
+
+The gateway is now deliberately lite: **caching + metrics only**. Where this
+differs from the description above, this section wins.
+
+- **No gateway rate limiter.** Limits stay where they already live: nginx
+  `limit_req` at the edge, `service/`'s own per-IP limiter, the worker's
+  Durable Object, and your own quota for BYO keys. Upstream `429`s reach the
+  extension as `429` with `retry_after_seconds`.
+- **Not bound to daemon2.** The gateway never runs a model and doesn't
+  bundle `service/`: every provider is an async HTTP call. daemon2 is
+  opt-in via `SERVICE_URL` (answers `503` without it; cache hits are still
+  served). The default provider is `worker`.
+- **Scales out.** Async Redis + pooled HTTP client, image hashing off the
+  event loop, batched background SQLite writer, several uvicorn workers
+  (`WEB_CONCURRENCY`). Cache lookups use a multi-index Hamming search
+  instead of loading the whole cache per request; `CACHE_TTL_S` works per
+  entry.
+- **Hosts next to other apps.** Unique compose project name; nginx is
+  published on `127.0.0.1:8090` (not `0.0.0.0:80`), Redis and the app are
+  never published; nginx only serves `/classify`, `/correct`, `/health`
+  and overwrites `X-Forwarded-For` so clients can't spoof their IP. Put your
+  existing reverse proxy in front and set `NGINX_TRUSTED_PROXY`.
+
+```bash
+cd server && docker compose up -d --build                     # gateway + Redis + nginx
+SERVICE_URL=http://service:8080 docker compose --profile daemon2 up -d --build   # + daemon2
+```
+
+All settings (all optional): `server/.env.example`. Details:
+`server/README.md` → "Lite gateway".
+
+### Viewing gateway statistics
+
+Run from `server/` while the stack is up (`docker compose` or `podman
+compose`):
+
+```bash
+# summary: cache hit rate, Hamming distances, latency p50/p95/p99, corrections
+docker compose exec app python analyze_metrics.py            # add --days N to limit
+
+# last 10 requests: time | provider | mode | cache hit | distance | name | error | seconds
+docker compose exec app python -c "import sqlite3; c=sqlite3.connect('/data/metrics.sqlite3'); [print(*r, sep=' | ') for r in c.execute(\"select datetime(ts,'unixepoch','localtime'), provider, mode, cache_hit, cache_hamming_distance, filename_slug, error, round(total_seconds,2) from classification_log order by id desc limit 10\")]"
+
+# what is cached right now: pHash -> name
+docker compose exec redis sh -c 'for k in $(redis-cli --scan --pattern "dnm:cache:e:*"); do echo "$k $(redis-cli get $k)"; done'
+
+# live gateway log (MISS/HIT, provider errors)
+docker compose logs -f app
+
+# health: Redis, cache settings, configured providers
+curl http://localhost:8090/health
+```
+
+Example from a local run (a repeated image is served from the cache in
+~0.01 s instead of 3.6–4.5 s through the model, whichever provider asks):
+
+```
+2026-09-16 10:24:04 | google | manual | 1 | 0    | связи-между-девушками-и-парнями | None | 0.01
+2026-09-16 10:24:01 | google | manual | 0 | None | связи-между-девушками-и-парнями | None | 4.49
+2026-09-16 10:22:29 | google | manual | 1 | 0    | good-experience-vs-everything   | None | 0.01
+2026-09-16 10:22:21 | google | manual | 0 | None | good-experience-vs-everything   | None | 3.63
+2026-09-16 10:17:49 | claude | auto   | 1 | 0    | when-the-cache-finally-works    | None | 0.17
+2026-09-16 10:17:41 | worker | auto   | 0 | None | when-the-cache-finally-works    | None | 1.06
+```
+
+The "OCR fast-path vs VLM fallback" block of `analyze_metrics.py` is only
+meaningful for `daemon2`; other providers in manual mode show up there as
+100% fallback.
+
 ### "Rename last" correction flow
 
 The popup's **Rename last** button re-runs classification on the last image
@@ -624,6 +694,77 @@ Daemon2 (service/) и всех провайдеров со своим ключо
 nginx; варианты деплоя Redis, конфиг и справочник API — в
 `server/README.md`). Затем впишите задеплоенный URL в `OWNER_GATEWAY_URL` в
 `extension/background.js`.
+
+### Лёгкий шлюз (текущее поведение)
+
+Шлюз теперь намеренно лёгкий: **только кэш и метрики**. Где это расходится
+с описанием выше, действует этот раздел.
+
+- **Без rate limiter в шлюзе.** Лимиты остаются там, где уже есть: nginx
+  `limit_req` на входе, собственный per-IP лимитер `service/`, Durable
+  Object воркера и ваша собственная квота для своих ключей. `429` от
+  провайдера доходит до расширения как `429` с `retry_after_seconds`.
+- **Не привязан к daemon2.** Шлюз не запускает модели и не содержит
+  `service/`: каждый провайдер — асинхронный HTTP-вызов. daemon2 включается
+  через `SERVICE_URL` (без него — `503`, попадания в кэш всё равно
+  отдаются). Провайдер по умолчанию — `worker`.
+- **Масштабируется.** Асинхронный Redis + общий пул HTTP, хеширование
+  изображений вне event loop, пакетная фоновая запись в SQLite, несколько
+  воркеров uvicorn (`WEB_CONCURRENCY`). Поиск в кэше — multi-index поиск по
+  Хэммингу вместо загрузки всего кэша на каждый запрос; `CACHE_TTL_S`
+  работает для каждой записи.
+- **Уживается с другими приложениями.** Уникальное имя compose-проекта;
+  nginx публикуется на `127.0.0.1:8090` (а не `0.0.0.0:80`), Redis и
+  приложение не публикуются; nginx отдаёт только `/classify`, `/correct`,
+  `/health` и перезаписывает `X-Forwarded-For`, так что клиент не может
+  подделать свой IP. Поставьте свой reverse proxy впереди и задайте
+  `NGINX_TRUSTED_PROXY`.
+
+```bash
+cd server && docker compose up -d --build                     # шлюз + Redis + nginx
+SERVICE_URL=http://service:8080 docker compose --profile daemon2 up -d --build   # + daemon2
+```
+
+Все настройки (все необязательные): `server/.env.example`. Подробности:
+`server/README.md` → "Lite gateway".
+
+### Просмотр статистики шлюза
+
+Запускать из `server/`, пока стек работает (`docker compose` или `podman
+compose`):
+
+```bash
+# сводка: доля попаданий в кэш, расстояния Хэмминга, задержки p50/p95/p99, коррекции
+docker compose exec app python analyze_metrics.py            # --days N — только последние N дней
+
+# последние 10 запросов: время | провайдер | режим | попадание в кэш | расстояние | имя | ошибка | секунды
+docker compose exec app python -c "import sqlite3; c=sqlite3.connect('/data/metrics.sqlite3'); [print(*r, sep=' | ') for r in c.execute(\"select datetime(ts,'unixepoch','localtime'), provider, mode, cache_hit, cache_hamming_distance, filename_slug, error, round(total_seconds,2) from classification_log order by id desc limit 10\")]"
+
+# что сейчас в кэше: pHash -> имя
+docker compose exec redis sh -c 'for k in $(redis-cli --scan --pattern "dnm:cache:e:*"); do echo "$k $(redis-cli get $k)"; done'
+
+# живой лог шлюза (MISS/HIT, ошибки провайдеров)
+docker compose logs -f app
+
+# состояние: Redis, настройки кэша, подключённые провайдеры
+curl http://localhost:8090/health
+```
+
+Пример локального запуска (повторная картинка отдаётся из кэша за ~0,01 с
+вместо 3,6–4,5 с через модель — от какого бы провайдера ни пришёл запрос):
+
+```
+2026-09-16 10:24:04 | google | manual | 1 | 0    | связи-между-девушками-и-парнями | None | 0.01
+2026-09-16 10:24:01 | google | manual | 0 | None | связи-между-девушками-и-парнями | None | 4.49
+2026-09-16 10:22:29 | google | manual | 1 | 0    | good-experience-vs-everything   | None | 0.01
+2026-09-16 10:22:21 | google | manual | 0 | None | good-experience-vs-everything   | None | 3.63
+2026-09-16 10:17:49 | claude | auto   | 1 | 0    | when-the-cache-finally-works    | None | 0.17
+2026-09-16 10:17:41 | worker | auto   | 0 | None | when-the-cache-finally-works    | None | 1.06
+```
+
+Блок «OCR fast-path vs VLM fallback» в `analyze_metrics.py` имеет смысл
+только для `daemon2`; другие провайдеры в режиме manual попадают туда как
+100% fallback.
 
 ### Корректировка «Rename last»
 

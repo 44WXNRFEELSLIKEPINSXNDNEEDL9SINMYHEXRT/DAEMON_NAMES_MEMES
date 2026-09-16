@@ -183,8 +183,15 @@ const DAEMON2_DEFAULT_URL = "http://localhost:8090";
 //   3. null — no gateway: legacy direct calls; daemon2 alone still works
 //      against localhost for development (DAEMON2_DEFAULT_URL).
 function resolveGatewayUrl(settings) {
-  const url = (settings.gatewayUrl || OWNER_GATEWAY_URL || "").trim();
-  return url ? url.replace(/\/+$/, "") : null;
+  return normalizeGatewayUrl(settings.gatewayUrl || OWNER_GATEWAY_URL) || null;
+}
+
+// "1.2.3.4:8090" -> "http://1.2.3.4:8090": fetch() needs a scheme. Also
+// covers values saved before options.js normalized them.
+function normalizeGatewayUrl(value) {
+  const url = (value || "").trim().replace(/\/+$/, "");
+  if (!url) return "";
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `http://${url}`;
 }
 
 async function classifyViaGateway(gatewayUrl, provider, base64, mimeType, locale, settings, mode) {
@@ -316,14 +323,18 @@ async function recordStats(memeInfo, imageBlob, provider, sourceUrl, mode) {
   const now = Date.now();
   const usage = rateLimitUsage?.[provider] || { windowStart: 0, count: 0 };
   const withinWindow = now - usage.windowStart < 60000;
+  // A gateway cache hit never reached the provider, so it doesn't use quota.
+  const newUsage = memeInfo._cacheHit
+    ? usage
+    : withinWindow
+      ? { windowStart: usage.windowStart, count: usage.count + 1 }
+      : { windowStart: now, count: 1 };
 
   chrome.storage.local.set({
     stats: newStats,
     rateLimitUsage: {
       ...rateLimitUsage,
-      [provider]: withinWindow
-        ? { windowStart: usage.windowStart, count: usage.count + 1 }
-        : { windowStart: now, count: 1 }
+      [provider]: newUsage
     },
     // "Rename last" (popup) needs enough state to re-run classification on
     // the SAME original image and correctly tell the gateway whether the

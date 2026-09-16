@@ -74,5 +74,43 @@ result = metrics.log_classification(provider="daemon2")
 assert result is None  # swallowed, logged, didn't raise
 print("failure path swallowed OK (no exception propagated)")
 
+# --- background writer (request path): batched, non-blocking, never raises ---
+config.METRICS_DB_PATH = db_path
+config.METRICS_BATCH_SIZE = 50
+importlib.reload(metrics)
+before = conn.execute("SELECT COUNT(*) FROM classification_log").fetchone()[0]
+writer = metrics.MetricsWriter()
+writer.start()
+assert writer.running
+for i in range(500):
+    writer.record(provider="worker", mode="auto", cache_hit=bool(i % 2), filename_slug=f"w{i}")
+assert writer.flush(10)
+after = conn.execute("SELECT COUNT(*) FROM classification_log").fetchone()[0]
+assert after - before == 500, (before, after)
+writer.record(provider="worker", bogus_field=1)  # invalid row: logged, not raised
+writer.stop()
+assert not writer.running
+writer.record(provider="worker")  # after stop: silently ignored
+print("MetricsWriter batched 500 rows, tolerant of bad rows OK")
+
+# queue full -> rows dropped, record() never blocks
+config.METRICS_QUEUE_SIZE = 1
+importlib.reload(metrics)
+tiny = metrics.MetricsWriter()
+tiny._thread = object()  # pretend running without a consumer
+tiny.record(provider="x"); tiny.record(provider="x"); tiny.record(provider="x")
+assert tiny._dropped == 2
+print("full queue drops instead of blocking OK")
+
+# unwritable path -> writer disabled, record() is a no-op
+config.METRICS_DB_PATH = "/definitely/does/not/exist/metrics.sqlite3"
+config.METRICS_QUEUE_SIZE = 10000
+importlib.reload(metrics)
+dead = metrics.MetricsWriter()
+dead.start()
+assert not dead.running
+dead.record(provider="x")
+print("unwritable DB disables writer without raising OK")
+
 conn.close()
 print("\nALL METRICS TESTS PASSED")

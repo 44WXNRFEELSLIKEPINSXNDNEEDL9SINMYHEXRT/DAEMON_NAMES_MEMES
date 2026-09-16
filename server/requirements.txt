@@ -1,7 +1,6 @@
-# Gateway (server/) runtime — does NOT need the VLM/OCR stack directly; it
-# imports service/pipeline.py in-process, so service/'s own requirements
-# (llama-cpp-python, rapidocr, etc.) must also be installed in the same
-# environment when running in-process mode (the default). See Dockerfile.
+# Gateway (server/) runtime — cache + metrics + HTTP proxying only. No
+# model/OCR stack: daemon2 is reached over HTTP (SERVICE_URL), so this image
+# stays small. Pinned; tested on Python 3.11.
 fastapi==0.141.1
 uvicorn==0.52.4
 pydantic==2.13.5
