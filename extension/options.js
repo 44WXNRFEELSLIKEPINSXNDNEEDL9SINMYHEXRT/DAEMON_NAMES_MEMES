@@ -72,7 +72,7 @@ function buildProviderCards() {
     if (unavailable) {
       // No radio, no key/rate fields — purely informational, cannot be selected.
       return `
-        <div class="provider is-unavailable" data-provider="${p.id}" aria-disabled="true">
+        <div class="provider is-unavailable span-2" data-provider="${p.id}" aria-disabled="true">
           <div class="provider-row">
             <span class="provider-label provider-label-disabled">
               <input type="radio" disabled>
@@ -83,10 +83,10 @@ function buildProviderCards() {
           </div>
           <div class="provider-fields provider-fields-static">
             <p class="unavailable-hint">
-              Self-hosted two-stage OCR + Qwen3-VL-4B classifier — see <code>service/</code>.
-              No free-tier CPU host fits the ≥4&nbsp;GB RAM footprint, so this provider isn't
-              reachable yet. Cold start isn't the blocker here — it can't be launched anywhere
-              free at all right now. Tracked for a future release once it's actually hosted.
+              Two-stage OCR + Qwen3-VL-4B classifier — see <code>service/</code>. No free-tier
+              CPU host fits the ≥4&nbsp;GB RAM footprint, so this provider isn't reachable yet.
+              Cold start isn't the blocker here — it can't be launched anywhere free at all
+              right now. Tracked for a future release once it's actually hosted somewhere.
             </p>
           </div>
         </div>`;
@@ -110,7 +110,7 @@ function buildProviderCards() {
          </div>`;
 
     return `
-      <div class="provider" data-provider="${p.id}">
+      <div class="provider${locked ? " span-2" : ""}" data-provider="${p.id}">
         <div class="provider-row">
           <label class="provider-label">
             <input type="radio" name="apiProvider" value="${p.id}">

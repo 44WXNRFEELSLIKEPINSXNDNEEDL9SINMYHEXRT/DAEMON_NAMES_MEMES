@@ -46,7 +46,7 @@ function render(settings) {
     keyEl.textContent = "daemon server · no key needed";
     keyEl.classList.add("server");
   } else if (provider === "daemon2") {
-    keyEl.textContent = "self-hosted gateway · no key needed";
+    keyEl.textContent = "service/ instance · no key needed";
     keyEl.classList.add("server");
   } else if (key) {
     keyEl.textContent = maskKey(key);
