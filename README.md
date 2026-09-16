@@ -1,5 +1,7 @@
 <a id="english"></a>
-![Logo"|653](pictures/logo.png)
+<p align="center">
+  <img src="pictures/logo.png" alt="Logo">
+</p>
 
 **[English](#english) | [Русский](#russian)**
 
