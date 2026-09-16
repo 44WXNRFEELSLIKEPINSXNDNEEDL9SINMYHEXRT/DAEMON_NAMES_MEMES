@@ -27,6 +27,7 @@ click beyond the one you'd make anyway to save the image.
 <p align="center">
   <img src="pictures/context-menu.png" alt="Context menu option">
 <p>
+
 **The file lands with a real name.** Instead of `image (4).jpeg`, the save
 dialog offers a slug the vision model generated from what's actually in the
 picture — here `absolute-breakcore-meme.jpeg`.
@@ -517,7 +518,7 @@ The extension has no build step — reload it from `chrome://extensions`.
 
 ---
 
-## Cloudflare Worker (`worker\`)
+## Cloudflare Worker (`worker/`)
 
 Нужен только для бессключевого провайдера Daemon:
 
