@@ -255,8 +255,8 @@ async def run_worker(client: httpx.AsyncClient, image_b64: str, mime_type: str, 
 # BYO-API-key providers
 # --------------------------------------------------------------------------
 def _byo_request(provider: str, image_b64: str, mime_type: str, prompt: str,
-                 api_key: str) -> tuple[str, dict, dict]:
-    model = model_for(provider)
+                 api_key: str, model: str | None = None) -> tuple[str, dict, dict]:
+    model = model or model_for(provider)
     if provider == "google":
         return (
             f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
@@ -304,12 +304,13 @@ def _byo_text(provider: str, data: dict) -> str | None:
 
 
 async def run_byo_key(client: httpx.AsyncClient, provider: str, image_b64: str, mime_type: str,
-                      locale: str, api_key: str, reject_slug: str | None) -> ProviderResult:
+                      locale: str, api_key: str, reject_slug: str | None,
+                      model: str | None = None) -> ProviderResult:
     if not api_key:
         return _error("missing_api_key", status=400)
 
     url, headers, body = _byo_request(provider, image_b64, mime_type,
-                                      build_prompt(locale, reject_slug), api_key)
+                                      build_prompt(locale, reject_slug), api_key, model)
     t0 = time.perf_counter()
     try:
         resp = await client.post(url, headers=headers, json=body)
@@ -333,14 +334,15 @@ async def run_byo_key(client: httpx.AsyncClient, provider: str, image_b64: str, 
 
 async def run_provider(client: httpx.AsyncClient, provider: str, image_b64: str, mime_type: str,
                        locale: str, mode: str, reject_slug: str | None = None,
-                       api_key: str | None = None, client_ip: str | None = None) -> ProviderResult:
+                       api_key: str | None = None, client_ip: str | None = None,
+                       model: str | None = None) -> ProviderResult:
     """Single dispatch point app.py calls."""
     if provider == "daemon2":
         return await run_daemon2(client, image_b64, mime_type, locale, mode, reject_slug, client_ip)
     if provider == "worker":
         return await run_worker(client, image_b64, mime_type, locale, reject_slug)
     if provider in BYO_KEY_PROVIDERS:
-        return await run_byo_key(client, provider, image_b64, mime_type, locale, api_key or "", reject_slug)
+        return await run_byo_key(client, provider, image_b64, mime_type, locale, api_key or "", reject_slug, model)
     return _error("unknown_provider", status=400)
 
 

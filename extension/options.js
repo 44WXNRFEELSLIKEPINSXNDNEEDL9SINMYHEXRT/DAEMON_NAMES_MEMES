@@ -1,20 +1,23 @@
 // Providers with a `fixedLimit` are locked: no API key, and the rate is enforced
-// server-side so it can't be changed here.
+// server-side so it can't be changed here. `defaultModel` is what's actually
+// used unless the user pins their own in that provider's "Model" field —
+// keep these in sync with DEFAULT_MODELS in background.js.
 const PROVIDERS = [
   { id: "worker",     name: "DAEMON",     note: "Shared server · no key needed", fixedLimit: 5 },
   { id: "daemon2",    name: "DAEMON2",    note: "Qwen3-VL + OCR", unavailable: true },
-  { id: "google",     name: "Google",     note: "Gemini vision" },
-  { id: "claude",     name: "Anthropic",  note: "Claude vision" },
-  { id: "openai",     name: "OpenAI",     note: "GPT vision" },
-  { id: "openrouter", name: "OpenRouter", note: "Any model · one key" },
-  { id: "groq",       name: "Groq",       note: "Llama vision · fast" },
-  { id: "mistral",    name: "Mistral",    note: "Pixtral vision" },
-  { id: "xai",        name: "xAI",        note: "Grok vision" }
+  { id: "google",     name: "Google",     note: "Gemini vision",           defaultModel: "gemini-3.1-flash-lite" },
+  { id: "claude",     name: "Anthropic",  note: "Claude vision",           defaultModel: "claude-3-5-haiku-latest" },
+  { id: "openai",     name: "OpenAI",     note: "GPT vision",              defaultModel: "gpt-4o-mini" },
+  { id: "openrouter", name: "OpenRouter", note: "Any model · one key",     defaultModel: "openai/gpt-4o-mini" },
+  { id: "groq",       name: "Groq",       note: "Llama vision · fast",     defaultModel: "llama-3.2-90b-vision-preview" },
+  { id: "mistral",    name: "Mistral",    note: "Pixtral vision",          defaultModel: "pixtral-12b-2409" },
+  { id: "xai",        name: "xAI",        note: "Grok vision",             defaultModel: "grok-2-vision-1212" }
 ];
 
 const DEFAULTS = {
   apiProvider: "worker",
   apiKeys: { google: "", claude: "", openai: "", openrouter: "", groq: "", mistral: "", xai: "" },
+  apiModels: { google: "", claude: "", openai: "", openrouter: "", groq: "", mistral: "", xai: "" },
   rateLimits: { google: 0, claude: 0, openai: 0, openrouter: 0, groq: 0, mistral: 0, xai: 0 },
   namingPrefix: "",
   dateFormat: "system",
@@ -103,6 +106,10 @@ function buildProviderCards() {
              <input type="password" class="key-input" id="key-${p.id}" placeholder="API key" autocomplete="off">
              <button type="button" class="toggle-visibility" data-target="key-${p.id}">show</button>
            </div>
+           <div class="model-field">
+             <span class="field-hint">Model (optional — default shown)</span>
+             <input type="text" class="model-input" id="model-${p.id}" placeholder="${p.defaultModel}" spellcheck="false" autocomplete="off">
+           </div>
            <div class="rate-row">
              <input type="number" class="rate-input" id="rate-${p.id}" min="0" step="1" placeholder="no limit">
              <span class="rate-unit">/ min</span>
@@ -134,6 +141,7 @@ function load() {
     PROVIDERS.forEach(p => {
       if (p.fixedLimit != null || p.unavailable) return; // locked or unavailable; no inputs
       document.getElementById(`key-${p.id}`).value = settings.apiKeys[p.id] || "";
+      document.getElementById(`model-${p.id}`).value = settings.apiModels?.[p.id] || ""; // blank shows the default model
       const rate = settings.rateLimits[p.id] ?? 0;
       document.getElementById(`rate-${p.id}`).value = rate > 0 ? rate : ""; // blank shows "no limit"
     });
@@ -151,16 +159,19 @@ function save() {
   const apiProvider = document.querySelector('input[name="apiProvider"]:checked').value;
 
   const apiKeys = {};
+  const apiModels = {};
   const rateLimits = {};
   PROVIDERS.forEach(p => {
     if (p.fixedLimit != null || p.unavailable) return; // locked or unavailable; server-enforced / no inputs
     apiKeys[p.id] = document.getElementById(`key-${p.id}`).value.trim();
+    apiModels[p.id] = document.getElementById(`model-${p.id}`).value.trim();
     rateLimits[p.id] = Number(document.getElementById(`rate-${p.id}`).value) || 0;
   });
 
   const settings = {
     apiProvider,
     apiKeys,
+    apiModels,
     rateLimits,
     namingPrefix: document.getElementById("prefix").value.trim(),
     dateFormat: document.getElementById("dateFormat").value,

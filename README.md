@@ -66,6 +66,9 @@ own gateway instance.
 
 - Smart limits. Your own keys have no limit by default. The shared Daemon
   server is capped at 5 calls a minute, enforced server side.
+- Every BYO-key provider ships with a sane default model, but you can pin a
+  different one per provider in Settings (e.g. swap Gemini's flash-lite for
+  a bigger vision model) — leave it blank to keep using the default.
 - Optional prefix for every renamed file; pick your date format for
   non-memes; a stats dashboard in the popup; EN + RU localization.
 
@@ -489,6 +492,10 @@ The extension has no build step — reload it from `chrome://extensions`.
   вообще без ключа.
 - Умные лимиты: свои ключи без лимита, общий сервер Daemon — 5 вызовов в
   минуту, лимит проверяется на сервере.
+- У каждого провайдера со своим ключом есть разумная модель по умолчанию, но
+  в Настройках можно закрепить свою для каждого провайдера отдельно (например,
+  заменить flash-lite у Gemini на более крупную модель) — пустое поле оставляет
+  модель по умолчанию.
 - Необязательный префикс имён, выбор формата даты для не-мемов, панель
   статистики во всплывающем окне, локализация EN + RU.
 

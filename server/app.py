@@ -107,9 +107,13 @@ def _common_fields(payload: dict) -> tuple[dict, JSONResponse | None]:
         "mode": payload.get("mode") or "auto",
         "provider": payload.get("provider") or config.DEFAULT_PROVIDER,
         "api_key": payload.get("apiKey") or None,
+        # Optional per-request override of the provider's configured default
+        # model (extension Settings → a provider's "Model" field).
+        "model": payload.get("model") or None,
     }
     if not all(isinstance(fields[k], str) for k in ("image", "mime_type", "locale", "mode", "provider")) \
-            or not isinstance(fields["api_key"], (str, type(None))):
+            or not isinstance(fields["api_key"], (str, type(None))) \
+            or not isinstance(fields["model"], (str, type(None))):
         return fields, _json_error(400, "invalid_field_types")
     fields["mode"] = fields["mode"].strip().lower()
     if fields["mode"] not in ("auto", "manual"):
@@ -257,7 +261,7 @@ def create_app(*, redis_client=None, http_client: httpx.AsyncClient | None = Non
 
         pr = await providers.run_provider(
             state.http, provider, image_b64, detected_mime or f["mime_type"], f["locale"], mode,
-            api_key=f["api_key"], client_ip=client_ip,
+            api_key=f["api_key"], client_ip=client_ip, model=f["model"],
         )
         if pr.ok:
             await state.cache.store(phash, pr.result, is_meme_known=not assumed, overwrite=not assumed)
@@ -278,7 +282,8 @@ def create_app(*, redis_client=None, http_client: httpx.AsyncClient | None = Non
         "Rename last" correction flow. Request:
             {
               "image": "<base64 of the ORIGINAL image>", "mimeType", "locale", "mode",
-              "provider", "apiKey",
+              "provider", "apiKey", "model",   # model: optional, overrides the provider's configured default
+
               "phash": "<X-Phash from the flagged result>",
               "cache_hit": bool,           # was the flagged result served from cache?
               "previous_slug": "<the filenameSlug the user is flagging as wrong>"
@@ -316,6 +321,7 @@ def create_app(*, redis_client=None, http_client: httpx.AsyncClient | None = Non
         pr = await providers.run_provider(
             state.http, provider, image_b64, detected_mime or f["mime_type"], f["locale"], mode,
             reject_slug=previous_slug or None, api_key=f["api_key"], client_ip=client_ip,
+            model=f["model"],
         )
         common = dict(provider=provider, mode=mode, client_key=client_ip, cache_hit=False,
                       was_correction=True, previous_wrong_slug=previous_slug,

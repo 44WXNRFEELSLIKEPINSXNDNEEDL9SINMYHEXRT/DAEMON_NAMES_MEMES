@@ -1,6 +1,9 @@
 const DEFAULTS = {
   apiProvider: "worker",
   apiKeys: { google: "", claude: "", openai: "", openrouter: "", groq: "", mistral: "", xai: "" },
+  // Empty string = use that provider's DEFAULT_MODELS entry below. Set from
+  // Settings → a provider's "Model" field to pin a specific model instead.
+  apiModels: { google: "", claude: "", openai: "", openrouter: "", groq: "", mistral: "", xai: "" },
   rateLimits: { google: 0, claude: 0, openai: 0, openrouter: 0, groq: 0, mistral: 0, xai: 0 },
   rateLimitUsage: {
     worker: { windowStart: 0, count: 0 },
@@ -38,17 +41,31 @@ const OWNER_GATEWAY_URL = "";
 // Enforced server-side by the worker itself, so it can't be raised from the extension.
 const WORKER_RATE_LIMIT = 5;
 
-const GOOGLE_MODEL = "gemini-3.1-flash-lite";
-const CLAUDE_MODEL = "claude-3-5-haiku-latest";
-
 // Providers that speak the OpenAI chat-completions protocol (Bearer key, image_url content parts).
 const OPENAI_COMPATIBLE = {
-  openai:     { endpoint: "https://api.openai.com/v1/chat/completions",       model: "gpt-4o-mini" },
-  openrouter: { endpoint: "https://openrouter.ai/api/v1/chat/completions",    model: "openai/gpt-4o-mini" },
-  groq:       { endpoint: "https://api.groq.com/openai/v1/chat/completions",  model: "llama-3.2-90b-vision-preview" },
-  mistral:    { endpoint: "https://api.mistral.ai/v1/chat/completions",       model: "pixtral-12b-2409" },
-  xai:        { endpoint: "https://api.x.ai/v1/chat/completions",             model: "grok-2-vision-1212" }
+  openai:     { endpoint: "https://api.openai.com/v1/chat/completions" },
+  openrouter: { endpoint: "https://openrouter.ai/api/v1/chat/completions" },
+  groq:       { endpoint: "https://api.groq.com/openai/v1/chat/completions" },
+  mistral:    { endpoint: "https://api.mistral.ai/v1/chat/completions" },
+  xai:        { endpoint: "https://api.x.ai/v1/chat/completions" }
 };
+
+// Fallback model per BYO-key provider, used unless the user pins one of
+// their own in Settings (settings.apiModels[provider]). Kept as one map so
+// options.js can show these as placeholders without duplicating the choice.
+const DEFAULT_MODELS = {
+  google: "gemini-3.1-flash-lite",
+  claude: "claude-3-5-haiku-latest",
+  openai: "gpt-4o-mini",
+  openrouter: "openai/gpt-4o-mini",
+  groq: "llama-3.2-90b-vision-preview",
+  mistral: "pixtral-12b-2409",
+  xai: "grok-2-vision-1212"
+};
+
+function modelFor(provider, settings) {
+  return settings.apiModels?.[provider]?.trim() || DEFAULT_MODELS[provider];
+}
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -84,9 +101,9 @@ function parseMemeInfo(rawText) {
   }
 }
 
-async function classifyWithGoogle(base64, mimeType, locale, apiKey) {
+async function classifyWithGoogle(base64, mimeType, locale, apiKey, model) {
   const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_MODEL}:generateContent`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -105,7 +122,7 @@ async function classifyWithGoogle(base64, mimeType, locale, apiKey) {
   return parseMemeInfo(data.candidates?.[0]?.content?.parts?.[0]?.text);
 }
 
-async function classifyWithClaude(base64, mimeType, locale, apiKey) {
+async function classifyWithClaude(base64, mimeType, locale, apiKey, model) {
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -116,7 +133,7 @@ async function classifyWithClaude(base64, mimeType, locale, apiKey) {
       "anthropic-dangerous-direct-browser-access": "true"
     },
     body: JSON.stringify({
-      model: CLAUDE_MODEL,
+      model,
       max_tokens: 300,
       messages: [{
         role: "user",
@@ -198,6 +215,10 @@ async function classifyViaGateway(gatewayUrl, provider, base64, mimeType, locale
   const body = { image: base64, mimeType, locale, mode, provider };
   const apiKey = settings.apiKeys?.[provider];
   if (apiKey) body.apiKey = apiKey;
+  // Only sent when the user pinned a model in Settings — otherwise the
+  // gateway's own configured default for the provider applies.
+  const model = settings.apiModels?.[provider]?.trim();
+  if (model) body.model = model;
 
   const resp = await fetch(`${gatewayUrl}/classify`, {
     method: "POST",
@@ -219,12 +240,13 @@ async function classifyViaGateway(gatewayUrl, provider, base64, mimeType, locale
 // classification pass; the gateway decides how to handle the cache
 // depending on whether the flagged result was itself a cache hit.
 // Works for every provider the gateway knows (daemon2, worker, BYO-key).
-async function correctViaGateway(gatewayUrl, { base64, mimeType, locale, mode, provider, apiKey, phash, cacheHit, previousSlug }) {
+async function correctViaGateway(gatewayUrl, { base64, mimeType, locale, mode, provider, apiKey, model, phash, cacheHit, previousSlug }) {
   const body = {
     image: base64, mimeType, locale, mode, provider,
     phash: phash || "", cache_hit: Boolean(cacheHit), previous_slug: previousSlug
   };
   if (apiKey) body.apiKey = apiKey;
+  if (model) body.model = model;
 
   const resp = await fetch(`${gatewayUrl}/correct`, {
     method: "POST",
@@ -267,11 +289,11 @@ async function classifyWith(provider, base64, mimeType, locale, settings, mode =
 
   // Legacy direct-call paths (no gateway anywhere — pre-deployment fallback).
   if (provider === "worker") return classifyWithWorker(base64, mimeType, locale);
-  if (provider === "google") return classifyWithGoogle(base64, mimeType, locale, apiKey);
-  if (provider === "claude") return classifyWithClaude(base64, mimeType, locale, apiKey);
+  if (provider === "google") return classifyWithGoogle(base64, mimeType, locale, apiKey, modelFor(provider, settings));
+  if (provider === "claude") return classifyWithClaude(base64, mimeType, locale, apiKey, modelFor(provider, settings));
 
   const cfg = OPENAI_COMPATIBLE[provider];
-  return classifyOpenAICompatible(cfg.endpoint, cfg.model, base64, mimeType, locale, apiKey);
+  return classifyOpenAICompatible(cfg.endpoint, modelFor(provider, settings), base64, mimeType, locale, apiKey);
 }
 
 function isRateLimited(usage, limit, now = Date.now()) {
@@ -616,6 +638,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         mode: last.mode || "manual",
         provider: last.provider || "daemon2",
         apiKey: settings.apiKeys?.[last.provider] || null,
+        model: settings.apiModels?.[last.provider]?.trim() || null,
         phash: last.phash || "",
         cacheHit: Boolean(last.cacheHit),
         previousSlug: last.filenameSlug || ""

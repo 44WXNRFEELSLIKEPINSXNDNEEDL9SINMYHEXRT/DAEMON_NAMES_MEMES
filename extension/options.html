@@ -326,7 +326,19 @@
     box-shadow: 0 0 0 3px rgba(138,28,28,0.15);
   }
 
-  .key-input, .rate-input { font-family: var(--mono); }
+  .key-input, .rate-input, .model-input { font-family: var(--mono); }
+
+  .model-input::placeholder { color: var(--text-faint); }
+
+  .model-field { display: flex; flex-direction: column; gap: 4px; }
+
+  .field-hint {
+    font-family: var(--body);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text-faint);
+  }
 
   #prefix, #dateFormat { font-family: var(--body); }
 

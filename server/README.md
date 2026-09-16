@@ -147,7 +147,8 @@ every backend behind an identical detail-dict interface.
   "image": "<base64>", "mimeType": "image/png", "locale": "ru",
   "mode": "manual|auto",
   "provider": "daemon2|worker|google|claude|openai|openrouter|groq|mistral|xai",
-  "apiKey": "<only for BYO-key providers — forwarded, never stored>"
+  "apiKey": "<only for BYO-key providers — forwarded, never stored>",
+  "model": "<optional — overrides that provider's configured default model>"
 }
 ```
 
@@ -162,7 +163,7 @@ CORS `*` on every path.
 ```json
 {
   "image": "<base64 of the ORIGINAL image>", "mimeType", "locale", "mode",
-  "provider", "apiKey",
+  "provider", "apiKey", "model",
   "phash": "<X-Phash from the flagged result>",
   "cache_hit": true,
   "previous_slug": "<the slug the user rejected>"
